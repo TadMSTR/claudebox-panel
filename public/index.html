@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>claudebox panel</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #0d0f12; --surface: #13161b; --border: #1e2229; --border2: #2a2f38;
+      --text: #c8cdd6; --dim: #5a6272; --accent: #4af0b0; --accent2: #2a9e72;
+      --warn: #f0c24a; --danger: #f05555; --info: #4ab0f0;
+      --mono: 'IBM Plex Mono', monospace; --sans: 'IBM Plex Sans', sans-serif;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; background: var(--bg); color: var(--text); font-family: var(--sans); font-size: 13px; line-height: 1.5; overflow: hidden; }
+    #app { display: grid; grid-template-rows: 44px 1fr; grid-template-columns: 220px 1fr; height: 100vh; }
+    #topbar { grid-column: 1 / -1; display: flex; align-items: center; gap: 12px; padding: 0 16px; background: var(--surface); border-bottom: 1px solid var(--border); }
+    #topbar .logo { font-family: var(--mono); font-size: 13px; font-weight: 600; color: var(--accent); letter-spacing: 0.08em; }
+    #topbar .logo span { color: var(--dim); }
+    #topbar .spacer { flex: 1; }
+    #topbar .clock { font-family: var(--mono); font-size: 11px; color: var(--dim); }
+    #sidebar { background: var(--surface); border-right: 1px solid var(--border); overflow-y: auto; display: flex; flex-direction: column; }
+    .nav-section { padding: 16px 0 8px; }
+    .nav-label { padding: 0 14px 6px; font-family: var(--mono); font-size: 9px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: var(--dim); }
+    .nav-item { display: flex; align-items: center; gap: 8px; padding: 7px 14px; cursor: pointer; font-size: 12px; color: var(--text); border-left: 2px solid transparent; transition: background 0.1s, border-color 0.1s, color 0.1s; user-select: none; }
+    .nav-item:hover { background: rgba(74,240,176,0.04); color: var(--accent); }
+    .nav-item.active { background: rgba(74,240,176,0.07); border-left-color: var(--accent); color: var(--accent); }
+    .nav-item .icon { font-size: 14px; width: 16px; text-align: center; flex-shrink: 0; }
+    .nav-item .badge { margin-left: auto; font-family: var(--mono); font-size: 9px; padding: 1px 5px; border-radius: 3px; background: var(--border2); color: var(--dim); }
+    .nav-item .badge.up { background: rgba(74,240,176,0.15); color: var(--accent); }
+    .nav-item .badge.warn { background: rgba(240,194,74,0.15); color: var(--warn); }
+    #main { overflow-y: auto; padding: 0; position: relative; }
+    .panel { display: none; height: 100%; }
+    .panel.active { display: flex; flex-direction: column; height: 100%; }
+    .panel-header { display: flex; align-items: center; gap: 10px; padding: 12px 20px; border-bottom: 1px solid var(--border); background: var(--surface); flex-shrink: 0; }
+    .panel-title { font-family: var(--mono); font-size: 12px; font-weight: 600; letter-spacing: 0.06em; color: var(--accent); }
+    .panel-subtitle { font-size: 11px; color: var(--dim); margin-left: 4px; }
+    .panel-actions { margin-left: auto; display: flex; gap: 8px; }
+    .btn { font-family: var(--mono); font-size: 11px; padding: 5px 12px; border: 1px solid var(--border2); border-radius: 3px; background: transparent; color: var(--text); cursor: pointer; transition: all 0.15s; }
+    .btn:hover { border-color: var(--accent); color: var(--accent); }
+    .btn.primary { border-color: var(--accent2); color: var(--accent); background: rgba(74,240,176,0.06); }
+    .btn.primary:hover { background: rgba(74,240,176,0.12); }
+    .btn.sm { padding: 3px 8px; font-size: 10px; }
+    .btn:disabled { opacity: 0.4; cursor: default; }
+    #panel-health .content, #panel-pm2 .content { padding: 20px; flex: 1; overflow-y: auto; }
+    .service-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 10px; }
+    .service-card { background: var(--surface); border: 1px solid var(--border); border-radius: 4px; padding: 14px 16px; display: flex; flex-direction: column; gap: 6px; }
+    .service-card.up { border-left: 3px solid var(--accent); }
+    .service-card.down { border-left: 3px solid var(--danger); }
+    .service-card.checking { border-left: 3px solid var(--dim); }
+    .service-name { font-family: var(--mono); font-size: 11px; font-weight: 600; color: var(--text); }
+    .service-meta { font-size: 11px; color: var(--dim); display: flex; align-items: center; gap: 8px; }
+    .status-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+    .status-dot.up { background: var(--accent); box-shadow: 0 0 6px var(--accent2); }
+    .status-dot.down { background: var(--danger); }
+    .status-dot.unknown { background: var(--dim); }
+    .service-link { font-family: var(--mono); font-size: 10px; color: var(--info); text-decoration: none; opacity: 0.7; }
+    .service-link:hover { opacity: 1; }
+    .pm2-table { width: 100%; border-collapse: collapse; }
+    .pm2-table th { font-family: var(--mono); font-size: 9px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: var(--dim); padding: 0 12px 8px; text-align: left; border-bottom: 1px solid var(--border); }
+    .pm2-table td { padding: 9px 12px; font-size: 12px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+    .pm2-table tr:last-child td { border-bottom: none; }
+    .pm2-table tr:hover td { background: rgba(255,255,255,0.015); }
+    .pm2-name { font-family: var(--mono); font-size: 12px; }
+    .pm2-status { font-family: var(--mono); font-size: 10px; padding: 2px 7px; border-radius: 3px; display: inline-block; }
+    .pm2-status.online { background: rgba(74,240,176,0.12); color: var(--accent); }
+    .pm2-status.stopped { background: rgba(90,98,114,0.2); color: var(--dim); }
+    .pm2-status.errored { background: rgba(240,85,85,0.12); color: var(--danger); }
+    .pm2-actions { display: flex; gap: 4px; }
+    .pm2-mono { font-family: var(--mono); color: var(--dim); font-size: 11px; }
+    #panel-files { flex-direction: row !important; }
+    #file-tree { width: 240px; flex-shrink: 0; border-right: 1px solid var(--border); overflow-y: auto; background: var(--surface); display: flex; flex-direction: column; }
+    #file-tree-header { padding: 12px 14px 8px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+    .tree-title { font-family: var(--mono); font-size: 10px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: var(--dim); }
+    #file-tree-content { flex: 1; overflow-y: auto; padding: 8px 0; }
+    .tree-root { padding: 6px 14px; font-family: var(--mono); font-size: 11px; color: var(--accent); font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 6px; border-left: 2px solid transparent; }
+    .tree-root:hover { background: rgba(74,240,176,0.05); }
+    .tree-root.open { border-left-color: var(--accent2); }
+    .tree-children { display: none; }
+    .tree-children.open { display: block; }
+    .tree-entry { padding: 4px 14px 4px 28px; font-family: var(--mono); font-size: 11px; color: var(--text); cursor: pointer; display: flex; align-items: center; gap: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .tree-entry:hover { background: rgba(255,255,255,0.03); color: var(--accent); }
+    .tree-entry.selected { background: rgba(74,240,176,0.07); color: var(--accent); }
+    #file-editor { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+    #editor-header { padding: 10px 16px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 10px; flex-shrink: 0; background: var(--surface); }
+    #editor-path { font-family: var(--mono); font-size: 10px; color: var(--dim); flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    #editor-textarea { flex: 1; width: 100%; background: var(--bg); color: var(--text); border: none; outline: none; resize: none; padding: 16px 20px; font-family: var(--mono); font-size: 12px; line-height: 1.7; tab-size: 2; }
+    #editor-status { padding: 6px 16px; font-family: var(--mono); font-size: 10px; color: var(--dim); border-top: 1px solid var(--border); background: var(--surface); flex-shrink: 0; display: flex; align-items: center; gap: 12px; }
+    #panel-logs .content { padding: 16px 20px; flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; }
+    .log-selector { display: flex; gap: 8px; align-items: center; }
+    .log-select { background: var(--surface); border: 1px solid var(--border2); color: var(--text); font-family: var(--mono); font-size: 11px; padding: 5px 10px; border-radius: 3px; outline: none; }
+    .log-select:focus { border-color: var(--accent); }
+    #log-output { flex: 1; background: var(--surface); border: 1px solid var(--border); border-radius: 4px; padding: 12px 16px; font-family: var(--mono); font-size: 11px; line-height: 1.6; overflow-y: auto; white-space: pre-wrap; word-break: break-all; color: var(--text); min-height: 200px; }
+    .loading { color: var(--dim); font-family: var(--mono); font-size: 11px; padding: 20px; }
+    .error-msg { color: var(--danger); font-family: var(--mono); font-size: 11px; padding: 12px 16px; background: rgba(240,85,85,0.06); border: 1px solid rgba(240,85,85,0.2); border-radius: 3px; }
+    .toast { position: fixed; bottom: 20px; right: 20px; padding: 10px 16px; background: var(--surface); border: 1px solid var(--border2); border-radius: 4px; font-family: var(--mono); font-size: 11px; color: var(--text); z-index: 999; animation: slideIn 0.2s ease; }
+    .toast.success { border-color: var(--accent2); color: var(--accent); }
+    .toast.error { border-color: rgba(240,85,85,0.5); color: var(--danger); }
+    @keyframes slideIn { from { transform: translateY(10px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+    ::-webkit-scrollbar { width: 5px; height: 5px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--dim); }
+  </style>
+</head>
+<body>
+<div id="app">
+  <div id="topbar">
+    <div class="logo">claudebox<span>/</span>panel</div>
+    <div class="spacer"></div>
+    <div class="clock" id="clock"></div>
+  </div>
+  <div id="sidebar">
+    <div class="nav-section">
+      <div class="nav-label">Overview</div>
+      <div class="nav-item active" data-panel="health" onclick="navigate('health', this)">
+        <span class="icon">◉</span> Services <span class="badge" id="badge-health">—</span>
+      </div>
+    </div>
+    <div class="nav-section">
+      <div class="nav-label">System</div>
+      <div class="nav-item" data-panel="pm2" onclick="navigate('pm2', this)">
+        <span class="icon">⬡</span> PM2 Processes <span class="badge" id="badge-pm2">—</span>
+      </div>
+      <div class="nav-item" data-panel="logs" onclick="navigate('logs', this)">
+        <span class="icon">≡</span> Process Logs
+      </div>
+    </div>
+    <div class="nav-section">
+      <div class="nav-label">Files</div>
+      <div class="nav-item" data-panel="files" onclick="navigate('files', this)">
+        <span class="icon">◫</span> File Browser
+      </div>
+    </div>
+  </div>
+  <div id="main">
+    <div id="panel-health" class="panel active">
+      <div class="panel-header">
+        <span class="panel-title">services</span><span class="panel-subtitle">health checks</span>
+        <div class="panel-actions"><button class="btn sm" onclick="loadHealth(true)">↺ refresh</button></div>
+      </div>
+      <div class="content">
+        <div class="service-grid" id="service-grid"><div class="loading">checking services…</div></div>
+        <p id="health-updated" style="margin-top:14px;font-family:var(--mono);font-size:10px;color:var(--dim)"></p>
+      </div>
+    </div>
+    <div id="panel-pm2" class="panel">
+      <div class="panel-header">
+        <span class="panel-title">pm2</span><span class="panel-subtitle">process manager</span>
+        <div class="panel-actions"><button class="btn sm" onclick="loadPM2()">↺ refresh</button></div>
+      </div>
+      <div class="content"><div id="pm2-content"><div class="loading">loading processes…</div></div></div>
+    </div>
+    <div id="panel-logs" class="panel">
+      <div class="panel-header">
+        <span class="panel-title">logs</span><span class="panel-subtitle">pm2 process output</span>
+        <div class="panel-actions"><button class="btn sm" onclick="loadLog()">↺ refresh</button></div>
+      </div>
+      <div class="content">
+        <div class="log-selector">
+          <select class="log-select" id="log-process-select" onchange="loadLog()"><option value="">select process…</option></select>
+          <select class="log-select" id="log-stream-select" onchange="loadLog()">
+            <option value="stdout">stdout</option><option value="stderr">stderr</option>
+          </select>
+          <select class="log-select" id="log-lines-select" onchange="loadLog()">
+            <option value="50">50 lines</option><option value="100" selected>100 lines</option>
+            <option value="250">250 lines</option><option value="500">500 lines</option>
+          </select>
+        </div>
+        <pre id="log-output">← select a process</pre>
+      </div>
+    </div>
+    <div id="panel-files" class="panel">
+      <div id="file-tree">
+        <div id="file-tree-header"><div class="tree-title">file browser</div></div>
+        <div id="file-tree-content"><div class="loading">loading…</div></div>
+      </div>
+      <div id="file-editor">
+        <div id="editor-header">
+          <span id="editor-path" style="color:var(--dim)">select a file to edit</span>
+          <button class="btn sm primary" id="btn-save" onclick="saveFile()" disabled>save</button>
+        </div>
+        <textarea id="editor-textarea" spellcheck="false" placeholder="No file selected." readonly></textarea>
+        <div id="editor-status">
+          <span id="editor-info">—</span>
+          <span id="editor-dirty" style="color:var(--warn);display:none">● unsaved changes</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+let currentFile = null, editorDirty = false, pm2Processes = [];
+
+function navigate(panel, el) {
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('panel-' + panel).classList.add('active');
+  el.classList.add('active');
+  if (panel === 'health') loadHealth();
+  if (panel === 'pm2') loadPM2();
+  if (panel === 'logs') initLogs();
+  if (panel === 'files') loadFileRoots();
+}
+
+function updateClock() {
+  document.getElementById('clock').textContent = new Date().toLocaleTimeString('en-US', { hour12: false });
+}
+setInterval(updateClock, 1000); updateClock();
+
+function toast(msg, type = '') {
+  const el = document.createElement('div');
+  el.className = 'toast ' + type; el.textContent = msg;
+  document.body.appendChild(el); setTimeout(() => el.remove(), 3000);
+}
+
+async function loadHealth(force = false) {
+  try {
+    const res = force ? await fetch('/api/health/refresh', { method: 'POST' }) : await fetch('/api/health');
+    renderHealth(await res.json());
+  } catch (e) { document.getElementById('service-grid').innerHTML = `<div class="error-msg">${e.message}</div>`; }
+}
+
+function renderHealth(data) {
+  const services = data.services || [];
+  const upCount = services.filter(s => s.status === 'up').length;
+  const downCount = services.filter(s => s.status === 'down').length;
+  const badge = document.getElementById('badge-health');
+  badge.textContent = `${upCount}/${services.length}`;
+  badge.className = 'badge ' + (downCount > 0 ? 'warn' : 'up');
+  document.getElementById('service-grid').innerHTML = services.map(svc => `
+    <div class="service-card ${svc.status}">
+      <div class="service-name">${svc.label}</div>
+      <div class="service-meta">
+        <div class="status-dot ${svc.status}"></div><span>${svc.status}</span>
+        ${svc.latency != null ? `<span style="margin-left:auto;font-size:10px">${svc.latency}ms</span>` : ''}
+      </div>
+      ${svc.link ? `<a class="service-link" href="${svc.link}" target="_blank">↗ open</a>` : ''}
+    </div>`).join('');
+  if (data.lastCheck)
+    document.getElementById('health-updated').textContent = 'last checked ' + new Date(data.lastCheck).toLocaleTimeString();
+}
+
+async function loadPM2() {
+  document.getElementById('pm2-content').innerHTML = '<div class="loading">loading…</div>';
+  try {
+    pm2Processes = await (await fetch('/api/pm2/list')).json();
+    const onlineCount = pm2Processes.filter(p => p.status === 'online').length;
+    const badge = document.getElementById('badge-pm2');
+    badge.textContent = `${onlineCount}/${pm2Processes.length}`;
+    badge.className = 'badge ' + (onlineCount === pm2Processes.length ? 'up' : 'warn');
+    document.getElementById('pm2-content').innerHTML = `
+      <table class="pm2-table">
+        <thead><tr><th>name</th><th>status</th><th>pid</th><th>restarts</th><th>cpu</th><th>mem</th><th>uptime</th><th>actions</th></tr></thead>
+        <tbody>${pm2Processes.map(p => `
+          <tr>
+            <td class="pm2-name">${p.name}</td>
+            <td><span class="pm2-status ${p.status}">${p.status}</span></td>
+            <td class="pm2-mono">${p.pid || '—'}</td>
+            <td class="pm2-mono">${p.restarts ?? '—'}</td>
+            <td class="pm2-mono">${p.cpu != null ? p.cpu + '%' : '—'}</td>
+            <td class="pm2-mono">${p.memory != null ? fmtBytes(p.memory) : '—'}</td>
+            <td class="pm2-mono">${p.uptime ? fmtUptime(p.uptime) : '—'}</td>
+            <td><div class="pm2-actions">
+              <button class="btn sm" onclick="pm2Action('restart','${p.name}')">restart</button>
+              <button class="btn sm" onclick="pm2Action('${p.status==='online'?'stop':'restart'}','${p.name}')">
+                ${p.status === 'online' ? 'stop' : 'start'}
+              </button>
+            </div></td>
+          </tr>`).join('')}
+        </tbody>
+      </table>`;
+    populateLogSelect(pm2Processes);
+  } catch (e) { document.getElementById('pm2-content').innerHTML = `<div class="error-msg">${e.message}</div>`; }
+}
+
+async function pm2Action(action, name) {
+  try {
+    const data = await (await fetch('/api/pm2/action', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({action,name}) })).json();
+    if (data.error) throw new Error(data.error);
+    toast(`${action} → ${name}`, 'success'); setTimeout(loadPM2, 1200);
+  } catch (e) { toast(`failed: ${e.message}`, 'error'); }
+}
+
+function initLogs() {
+  if (pm2Processes.length === 0) fetch('/api/pm2/list').then(r=>r.json()).then(p => { pm2Processes = p; populateLogSelect(p); });
+}
+function populateLogSelect(procs) {
+  const sel = document.getElementById('log-process-select'), cur = sel.value;
+  sel.innerHTML = '<option value="">select process…</option>' + procs.map(p => `<option value="${p.name}" ${p.name===cur?'selected':''}>${p.name}</option>`).join('');
+}
+async function loadLog() {
+  const name = document.getElementById('log-process-select').value;
+  const stream = document.getElementById('log-stream-select').value;
+  const lines = document.getElementById('log-lines-select').value;
+  const out = document.getElementById('log-output');
+  if (!name) return; out.textContent = 'loading…';
+  try {
+    const data = await (await fetch(`/api/pm2/logs?name=${encodeURIComponent(name)}&lines=${lines}`)).json();
+    out.textContent = (stream === 'stderr' ? data.stderr : data.stdout) || '(empty)';
+    out.scrollTop = out.scrollHeight;
+  } catch (e) { out.textContent = 'error: ' + e.message; }
+}
+
+async function loadFileRoots() {
+  const tree = document.getElementById('file-tree-content');
+  tree.innerHTML = '<div class="loading">loading…</div>';
+  try {
+    const roots = await (await fetch('/api/files/roots')).json();
+    tree.innerHTML = roots.map(r => `
+      <div class="tree-root" onclick="toggleRoot(this,'${esc(r.path)}','${r.type}')"><span>▸</span> ${r.label}</div>
+      <div class="tree-children" data-root="${esc(r.path)}"></div>`).join('');
+  } catch (e) { tree.innerHTML = `<div class="error-msg">${e.message}</div>`; }
+}
+
+async function toggleRoot(el, rootPath, type) {
+  const isOpen = el.classList.contains('open'), children = el.nextElementSibling;
+  if (isOpen) { el.classList.remove('open'); el.querySelector('span').textContent = '▸'; children.classList.remove('open'); return; }
+  el.classList.add('open'); el.querySelector('span').textContent = '▾'; children.classList.add('open');
+  if (type === 'file') { openFile(rootPath, el); return; }
+  if (children.dataset.loaded) return;
+  children.dataset.loaded = '1'; await browseDir(rootPath, children, 1);
+}
+
+async function browseDir(dirPath, container, depth) {
+  container.innerHTML = '<div class="loading" style="padding-left:28px">loading…</div>';
+  try {
+    const data = await (await fetch('/api/files/browse?path=' + encodeURIComponent(dirPath))).json();
+    if (data.error) throw new Error(data.error);
+    container.innerHTML = data.entries.map(e => `
+      <div class="tree-entry" style="padding-left:${14+depth*14}px"
+           onclick="${e.type==='dir' ? `browseSubdir(this,'${esc(e.path)}',${depth})` : `openFile('${esc(e.path)}',this)`}">
+        <span class="icon">${e.type==='dir'?'▸':fileIcon(e.ext)}</span>
+        <span style="overflow:hidden;text-overflow:ellipsis">${e.name}</span>
+      </div>
+      ${e.type==='dir'?`<div class="tree-children" style="display:none"></div>`:''}`).join('');
+  } catch(err) { container.innerHTML = `<div style="padding-left:28px;color:var(--danger);font-size:10px">${err.message}</div>`; }
+}
+
+function browseSubdir(el, dirPath, depth) {
+  const sibling = el.nextElementSibling, isOpen = el.dataset.open === '1';
+  if (isOpen) { el.dataset.open='0'; el.querySelector('.icon').textContent='▸'; if(sibling) sibling.style.display='none'; return; }
+  el.dataset.open='1'; el.querySelector('.icon').textContent='▾';
+  if (sibling) { sibling.style.display='block'; if(!sibling.dataset.loaded) { sibling.dataset.loaded='1'; browseDir(dirPath, sibling, depth+1); } }
+}
+
+async function openFile(filePath, el) {
+  document.querySelectorAll('.tree-entry.selected,.tree-root.selected').forEach(e=>e.classList.remove('selected'));
+  if (el) el.classList.add('selected');
+  document.getElementById('editor-path').textContent = filePath;
+  const textarea = document.getElementById('editor-textarea');
+  textarea.value = 'loading…'; textarea.readOnly = true; document.getElementById('btn-save').disabled = true;
+  try {
+    const data = await (await fetch('/api/files/read?path='+encodeURIComponent(filePath))).json();
+    if (data.error) throw new Error(data.error);
+    currentFile = filePath; editorDirty = false;
+    textarea.value = data.content; textarea.readOnly = !data.editable;
+    document.getElementById('btn-save').disabled = !data.editable;
+    document.getElementById('editor-info').textContent = `${data.content.split('\n').length} lines · ${fmtBytes(data.size)} · ${data.ext||'text'}${data.editable?'':' · read-only'}`;
+    document.getElementById('editor-dirty').style.display = 'none';
+    textarea.oninput = () => { if (!editorDirty) { editorDirty=true; document.getElementById('editor-dirty').style.display='inline'; } };
+  } catch(e) { textarea.value = 'Error: ' + e.message; currentFile = null; }
+}
+
+async function saveFile() {
+  if (!currentFile) return;
+  try {
+    const data = await (await fetch('/api/files/write', { method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ filePath: currentFile, content: document.getElementById('editor-textarea').value }) })).json();
+    if (data.error) throw new Error(data.error);
+    editorDirty = false; document.getElementById('editor-dirty').style.display = 'none'; toast('saved', 'success');
+  } catch(e) { toast('save failed: ' + e.message, 'error'); }
+}
+document.addEventListener('keydown', e => { if ((e.ctrlKey||e.metaKey) && e.key==='s') { e.preventDefault(); if (!document.getElementById('btn-save').disabled) saveFile(); } });
+
+function fmtBytes(b) { if (b<1024) return b+'B'; if (b<1048576) return (b/1024).toFixed(1)+'KB'; return (b/1048576).toFixed(1)+'MB'; }
+function fmtUptime(ts) { const s=Math.floor((Date.now()-ts)/1000); if(s<60)return s+'s'; if(s<3600)return Math.floor(s/60)+'m'; if(s<86400)return Math.floor(s/3600)+'h'; return Math.floor(s/86400)+'d'; }
+function fileIcon(ext) { return {'.md':'◎','.sh':'⚡','.conf':'⚙','.json':'{}','.yaml':'⚙','.yml':'⚙','.js':'⬡','.ts':'⬡','.env':'⚿','.txt':'◎','.log':'≡'}[ext]||'◦'; }
+function esc(s) { return s.replace(/'/g,"\\'"); }
+
+loadHealth();
+setInterval(() => { if (document.querySelector('.panel.active')?.id === 'panel-health') loadHealth(); }, 30000);
+</script>
+</body>
+</html>
