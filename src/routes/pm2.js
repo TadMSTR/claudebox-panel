@@ -84,7 +84,8 @@ router.get('/logs', async (req, res) => {
   function tailFile(filePath, n) {
     try {
       const content = fs.readFileSync(filePath, 'utf-8');
-      return content.split('\n').slice(-Math.abs(parseInt(n))).join('\n');
+      const clamped = Math.min(Math.abs(parseInt(n, 10) || 100), 1000);
+      return content.split('\n').slice(-clamped).join('\n');
     } catch (_) { return null; }
   }
   res.json({ name, stdout: tailFile(logPath, lines), stderr: tailFile(errPath, lines) });

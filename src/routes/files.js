@@ -56,7 +56,7 @@ router.get('/browse', (req, res) => {
         return a.name.localeCompare(b.name);
       });
     res.json({ path: resolved, entries });
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) { console.error('browse error:', err); res.status(500).json({ error: 'internal error' }); }
 });
 
 // GET /api/files/read?path=<path>
@@ -74,7 +74,7 @@ router.get('/read', (req, res) => {
     const editable = config.editableExtensions.includes(ext);
     const content = fs.readFileSync(resolved, 'utf-8');
     res.json({ path: resolved, content, editable, size: stat.size, ext });
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) { console.error('read error:', err); res.status(500).json({ error: 'internal error' }); }
 });
 
 // POST /api/files/write
@@ -92,7 +92,7 @@ router.post('/write', (req, res) => {
   try {
     fs.writeFileSync(resolved, content, 'utf-8');
     res.json({ ok: true, path: resolved });
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) { console.error('write error:', err); res.status(500).json({ error: 'internal error' }); }
 });
 
 module.exports = router;

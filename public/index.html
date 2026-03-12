@@ -194,6 +194,10 @@
 <script>
 let currentFile = null, editorDirty = false, pm2Processes = [];
 
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
 function navigate(panel, el) {
   document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
@@ -232,12 +236,12 @@ function renderHealth(data) {
   badge.className = 'badge ' + (downCount > 0 ? 'warn' : 'up');
   document.getElementById('service-grid').innerHTML = services.map(svc => `
     <div class="service-card ${svc.status}">
-      <div class="service-name">${svc.label}</div>
+      <div class="service-name">${escHtml(svc.label)}</div>
       <div class="service-meta">
         <div class="status-dot ${svc.status}"></div><span>${svc.status}</span>
         ${svc.latency != null ? `<span style="margin-left:auto;font-size:10px">${svc.latency}ms</span>` : ''}
       </div>
-      ${svc.link ? `<a class="service-link" href="${svc.link}" target="_blank">↗ open</a>` : ''}
+      ${svc.link ? `<a class="service-link" href="${escHtml(svc.link)}" target="_blank">↗ open</a>` : ''}
     </div>`).join('');
   if (data.lastCheck)
     document.getElementById('health-updated').textContent = 'last checked ' + new Date(data.lastCheck).toLocaleTimeString();
@@ -256,16 +260,16 @@ async function loadPM2() {
         <thead><tr><th>name</th><th>status</th><th>pid</th><th>restarts</th><th>cpu</th><th>mem</th><th>uptime</th><th>actions</th></tr></thead>
         <tbody>${pm2Processes.map(p => `
           <tr>
-            <td class="pm2-name">${p.name}</td>
-            <td><span class="pm2-status ${p.status}">${p.status}</span></td>
+            <td class="pm2-name">${escHtml(p.name)}</td>
+            <td><span class="pm2-status ${p.status}">${escHtml(p.status)}</span></td>
             <td class="pm2-mono">${p.pid || '—'}</td>
             <td class="pm2-mono">${p.restarts ?? '—'}</td>
             <td class="pm2-mono">${p.cpu != null ? p.cpu + '%' : '—'}</td>
             <td class="pm2-mono">${p.memory != null ? fmtBytes(p.memory) : '—'}</td>
             <td class="pm2-mono">${p.uptime ? fmtUptime(p.uptime) : '—'}</td>
             <td><div class="pm2-actions">
-              <button class="btn sm" onclick="pm2Action('restart','${p.name}')">restart</button>
-              <button class="btn sm" onclick="pm2Action('${p.status==='online'?'stop':'restart'}','${p.name}')">
+              <button class="btn sm" onclick="pm2Action('restart','${escHtml(p.name)}')">restart</button>
+              <button class="btn sm" onclick="pm2Action('${p.status==='online'?'stop':'restart'}','${escHtml(p.name)}')">
                 ${p.status === 'online' ? 'stop' : 'start'}
               </button>
             </div></td>
@@ -289,7 +293,7 @@ function initLogs() {
 }
 function populateLogSelect(procs) {
   const sel = document.getElementById('log-process-select'), cur = sel.value;
-  sel.innerHTML = '<option value="">select process…</option>' + procs.map(p => `<option value="${p.name}" ${p.name===cur?'selected':''}>${p.name}</option>`).join('');
+  sel.innerHTML = '<option value="">select process…</option>' + procs.map(p => `<option value="${escHtml(p.name)}" ${p.name===cur?'selected':''}>${escHtml(p.name)}</option>`).join('');
 }
 async function loadLog() {
   const name = document.getElementById('log-process-select').value;

@@ -25,6 +25,6 @@ app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, '../public/index.html'));
 });
 
-app.listen(config.port, '0.0.0.0', () => {
+app.listen(config.port, '127.0.0.1', () => {
   console.log(`claudebox-panel running on port ${config.port}`);
 });
