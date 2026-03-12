@@ -86,6 +86,7 @@
     .tree-children { display: none; }
     .tree-children.open { display: block; }
     .tree-entry { padding: 4px 14px 4px 28px; font-family: var(--mono); font-size: 11px; color: var(--text); cursor: pointer; display: flex; align-items: center; gap: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .hide-samples [data-sample] { display: none; }
     .tree-entry:hover { background: rgba(255,255,255,0.03); color: var(--accent); }
     .tree-entry.selected { background: rgba(74,240,176,0.07); color: var(--accent); }
     #file-editor { flex: 1; display: flex; flex-direction: column; min-width: 0; }
@@ -242,7 +243,10 @@
     </div>
     <div id="panel-files" class="panel">
       <div id="file-tree">
-        <div id="file-tree-header"><div class="tree-title">file browser</div></div>
+        <div id="file-tree-header" style="display:flex;align-items:center;gap:8px">
+          <div class="tree-title" style="flex:1">file browser</div>
+          <button class="btn sm" id="btn-toggle-samples" onclick="toggleSampleFiles()" title="Toggle .sample files" style="font-size:9px;padding:2px 6px;opacity:0.6">.sample</button>
+        </div>
         <div id="file-tree-content"><div class="loading">loading…</div></div>
       </div>
       <div id="file-editor">
@@ -275,6 +279,7 @@ let fileIsEditable  = false;  // server says this file type is editable
 let editingEnabled  = false;  // user has unlocked editing (read-only toggle)
 let hasBackup       = false;  // .panelbak exists on disk for currentFile
 let pm2Processes    = [];
+let hideSampleFiles = true;
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 function escHtml(s) {
@@ -408,6 +413,19 @@ async function loadLog() {
 }
 
 // ── File Tree ─────────────────────────────────────────────────────────────────
+function applySampleToggle() {
+  const tree = document.getElementById('file-tree-content');
+  const btn  = document.getElementById('btn-toggle-samples');
+  tree.classList.toggle('hide-samples', hideSampleFiles);
+  btn.style.opacity = hideSampleFiles ? '0.4' : '1';
+  btn.title = hideSampleFiles ? 'Show .sample files' : 'Hide .sample files';
+}
+
+function toggleSampleFiles() {
+  hideSampleFiles = !hideSampleFiles;
+  applySampleToggle();
+}
+
 async function loadFileRoots() {
   const tree = document.getElementById('file-tree-content');
   tree.innerHTML = '<div class="loading">loading…</div>';
@@ -416,6 +434,7 @@ async function loadFileRoots() {
     tree.innerHTML = roots.map(r => `
       <div class="tree-root" onclick="toggleRoot(this,'${esc(r.path)}','${r.type}')"><span>▸</span> ${r.label}</div>
       <div class="tree-children" data-root="${esc(r.path)}"></div>`).join('');
+    applySampleToggle();
   } catch (e) { tree.innerHTML = `<div class="error-msg">${e.message}</div>`; }
 }
 
@@ -434,16 +453,21 @@ async function browseDir(dirPath, container, depth) {
   try {
     const data = await (await fetch('/api/files/browse?path=' + encodeURIComponent(dirPath))).json();
     if (data.error) throw new Error(data.error);
-    container.innerHTML = data.entries.map(e => `
-      <div class="tree-entry" style="padding-left:${14+depth*14}px"
-           onclick="${e.type==='dir' ? `browseSubdir(this,'${esc(e.path)}',${depth})` : `openFile('${esc(e.path)}',this)`}">
-        <span class="icon">${e.type==='dir'?'▸':fileIcon(e.ext)}</span>
-        <span style="overflow:hidden;text-overflow:ellipsis">${e.name}</span>
-      </div>
-      ${e.type==='dir'?`<div class="tree-children" style="display:none"></div>`:''}`).join('');
+    container.innerHTML = data.entries.map(e => {
+      const isSample = e.type === 'file' && e.name.endsWith('.sample');
+      const sampleAttr = isSample ? ' data-sample="1"' : '';
+      const onclick = e.type === 'dir'
+        ? `browseSubdir(this,'${esc(e.path)}',${depth})`
+        : `openFile('${esc(e.path)}',this)`;
+      const icon = e.type === 'dir' ? '▸' : fileIcon(e.ext);
+      const child = e.type === 'dir' ? '<div class="tree-children" style="display:none"></div>' : '';
+      return `<div class="tree-entry" style="padding-left:${14+depth*14}px"${sampleAttr} onclick="${onclick}">` +
+        `<span class="icon">${icon}</span>` +
+        `<span style="overflow:hidden;text-overflow:ellipsis">${e.name}</span>` +
+        `</div>${child}`;
+    }).join('');
   } catch(err) { container.innerHTML = `<div style="padding-left:28px;color:var(--danger);font-size:10px">${err.message}</div>`; }
 }
-
 function browseSubdir(el, dirPath, depth) {
   if (!guardDirty()) return;
   const sibling = el.nextElementSibling, isOpen = el.dataset.open === '1';
