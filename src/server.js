@@ -1,4 +1,5 @@
 const express = require('express');
+const cors = require('cors');
 const path = require('path');
 const config = require('../config/config');
 
@@ -8,6 +9,11 @@ const healthRouter = require('./routes/health');
 
 const app = express();
 
+app.use(cors({
+  origin: config.allowedOrigins,
+  methods: ['GET', 'POST'],
+  credentials: true,
+}));
 app.use(express.json({ limit: '1mb' }));
 app.use(express.static(path.join(__dirname, '../public')));
 

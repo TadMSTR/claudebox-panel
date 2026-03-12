@@ -47,17 +47,25 @@ async function runChecks() {
   lastCheck = Date.now();
 }
 
-runChecks();
-setInterval(runChecks, config.healthCheckInterval);
+let started = false;
+
+function startChecks() {
+  if (started) return;
+  started = true;
+  runChecks();
+  setInterval(runChecks, config.healthCheckInterval);
+}
 
 // GET /api/health
 router.get('/', async (req, res) => {
+  startChecks();
   if (!lastCheck || Date.now() - lastCheck > config.healthCheckInterval * 2) await runChecks();
   res.json({ services: Object.values(cache), lastCheck, nextCheck: lastCheck + config.healthCheckInterval });
 });
 
 // POST /api/health/refresh
 router.post('/refresh', async (req, res) => {
+  startChecks();
   await runChecks();
   res.json({ ok: true, services: Object.values(cache), lastCheck });
 });

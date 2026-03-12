@@ -38,8 +38,21 @@ router.get('/list', async (req, res) => {
       return a.name.localeCompare(b.name);
     });
     res.json(processes);
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) { pm2.disconnect(); res.status(500).json({ error: err.message }); }
 });
+
+// Processes that cannot be stopped/reloaded from the panel (restart is OK)
+const PROTECTED_PROCESSES = ['agent-panel'];
+
+// Validate name matches a real PM2 process (prevents path traversal in log reads too)
+async function isValidPM2Process(name) {
+  try {
+    await connectPM2();
+    const list = await listPM2();
+    pm2.disconnect();
+    return list.some(p => p.name === name);
+  } catch (_) { pm2.disconnect(); return false; }
+}
 
 // POST /api/pm2/action
 router.post('/action', async (req, res) => {
@@ -47,6 +60,10 @@ router.post('/action', async (req, res) => {
   const allowed = ['restart', 'stop', 'reload'];
   if (!allowed.includes(action)) return res.status(400).json({ error: `action must be one of: ${allowed.join(', ')}` });
   if (!name) return res.status(400).json({ error: 'name required' });
+  if (PROTECTED_PROCESSES.includes(name) && action !== 'restart')
+    return res.status(403).json({ error: `cannot ${action} protected process: ${name}` });
+  if (!(await isValidPM2Process(name)))
+    return res.status(404).json({ error: `unknown process: ${name}` });
   try {
     await connectPM2();
     await pm2Action(action, name);
@@ -56,9 +73,12 @@ router.post('/action', async (req, res) => {
 });
 
 // GET /api/pm2/logs?name=<process>&lines=100
-router.get('/logs', (req, res) => {
+router.get('/logs', async (req, res) => {
   const { name, lines = 100 } = req.query;
   if (!name) return res.status(400).json({ error: 'name required' });
+  // Validate against actual PM2 processes to prevent path traversal
+  if (!(await isValidPM2Process(name)))
+    return res.status(404).json({ error: `unknown process: ${name}` });
   const logPath = `${os.homedir()}/.pm2/logs/${name}-out.log`;
   const errPath = `${os.homedir()}/.pm2/logs/${name}-error.log`;
   function tailFile(filePath, n) {

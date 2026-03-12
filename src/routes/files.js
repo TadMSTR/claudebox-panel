@@ -12,15 +12,19 @@ function getAllowedBases() {
 function isAllowed(resolvedPath) {
   const bases = getAllowedBases();
   return bases.some(base => {
-    const resolvedBase = path.resolve(base);
-    return resolvedPath === resolvedBase || resolvedPath.startsWith(resolvedBase + path.sep);
+    try {
+      const resolvedBase = fs.realpathSync(base);
+      return resolvedPath === resolvedBase || resolvedPath.startsWith(resolvedBase + path.sep);
+    } catch (_) { return false; }
   });
 }
 
 function resolve(requestedPath) {
-  const resolved = path.resolve(requestedPath);
-  if (!isAllowed(resolved)) return null;
-  return resolved;
+  try {
+    const resolved = fs.realpathSync(requestedPath);
+    if (!isAllowed(resolved)) return null;
+    return resolved;
+  } catch (_) { return null; }
 }
 
 // GET /api/files/roots
@@ -78,6 +82,8 @@ router.post('/write', (req, res) => {
   const { filePath, content } = req.body;
   if (!filePath || content === undefined)
     return res.status(400).json({ error: 'filePath and content required' });
+  if (Buffer.byteLength(content, 'utf-8') > config.maxEditSize)
+    return res.status(413).json({ error: `content too large (max ${config.maxEditSize} bytes)` });
   const resolved = resolve(filePath);
   if (!resolved) return res.status(403).json({ error: 'path not allowed' });
   const ext = path.extname(resolved).toLowerCase();

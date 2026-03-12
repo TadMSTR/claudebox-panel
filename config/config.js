@@ -6,6 +6,9 @@ const HOME = process.env.HOME || '/home/ted';
 module.exports = {
   port: 3003,
 
+  // CORS allowed origins
+  allowedOrigins: ['https://panel.claudebox.me'],
+
   // File browser: whitelisted directories and individual files
   filePaths: [
     { label: 'prime-directive',       path: `${HOME}/repos/personal/claude-prime-directive`, type: 'dir' },
