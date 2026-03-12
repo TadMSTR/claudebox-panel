@@ -31,7 +31,7 @@ module.exports = {
 
   // Health check services
   services: [
-    { label: 'LibreChat',           url: 'http://127.0.0.1:3080',  link: 'https://chat.claudebox.me' },
+    { label: 'LibreChat',           url: 'https://chat.claudebox.me',  link: 'https://chat.claudebox.me' },
     { label: 'Authelia',            url: 'http://127.0.0.1:9091',  link: 'https://auth.claudebox.me' },
     { label: 'Grafana',             url: 'http://10.10.1.9:3000',  link: 'https://grafana.claudebox.me' },
     { label: 'Netdata (claudebox)', url: 'http://127.0.0.1:19999', link: 'https://netdata.claudebox.me' },

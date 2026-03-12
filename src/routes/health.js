@@ -11,8 +11,11 @@ let lastCheck = 0;
 function httpPing(url, timeoutMs = 5000) {
   return new Promise(resolve => {
     const start = Date.now();
-    const mod = url.startsWith('https') ? https : http;
-    const req = mod.get(url, { timeout: timeoutMs }, res => {
+    const isHttps = url.startsWith('https');
+    const mod = isHttps ? https : http;
+    const opts = { timeout: timeoutMs };
+    if (isHttps) opts.rejectUnauthorized = false;
+    const req = mod.get(url, opts, res => {
       res.destroy();
       resolve({ ok: res.statusCode < 500, latency: Date.now() - start, statusCode: res.statusCode });
     });
