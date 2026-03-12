@@ -1,12 +1,12 @@
 const express = require('express');
 const os = require('os');
-const { execSync } = require('child_process');
+const { execFileSync } = require('child_process');
 
 const router = express.Router();
 
 function getDisk(mountpoint) {
   try {
-    const out = execSync(`df -B1 --output=size,used,avail ${mountpoint}`, { timeout: 5000 })
+    const out = execFileSync('df', ['-B1', '--output=size,used,avail', mountpoint], { timeout: 5000 })
       .toString().trim().split('\n');
     const [total, used, free] = out[1].trim().split(/\s+/).map(Number);
     return { total, used, free };
