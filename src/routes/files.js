@@ -5,6 +5,8 @@ const config = require('../../config/config');
 
 const router = express.Router();
 
+const BACKUP_EXT = '.panelbak';
+
 function getAllowedBases() {
   return config.filePaths.map(p => p.path);
 }
@@ -19,7 +21,20 @@ function isAllowed(resolvedPath) {
   });
 }
 
+// Allow access to .panelbak files that sit alongside an allowed file
+function isAllowedBackup(resolvedPath) {
+  if (!resolvedPath.endsWith(BACKUP_EXT)) return false;
+  const original = resolvedPath.slice(0, -BACKUP_EXT.length);
+  return isAllowed(original);
+}
+
 function resolve(requestedPath) {
+  // For .panelbak files, the original may not exist (was deleted), so use path.resolve + manual check
+  if (requestedPath.endsWith(BACKUP_EXT)) {
+    const abs = path.resolve(requestedPath);
+    if (isAllowedBackup(abs)) return abs;
+    return null;
+  }
   try {
     const resolved = fs.realpathSync(requestedPath);
     if (!isAllowed(resolved)) return null;
@@ -43,6 +58,7 @@ router.get('/browse', (req, res) => {
     if (!stat.isDirectory()) return res.status(400).json({ error: 'not a directory' });
     const entries = fs.readdirSync(resolved, { withFileTypes: true })
       .filter(e => !e.name.startsWith('.') || e.name === '.gitignore')
+      .filter(e => !e.name.endsWith(BACKUP_EXT)) // hide .panelbak files from tree
       .map(e => {
         const fullPath = path.join(resolved, e.name);
         const isDir = e.isDirectory();
@@ -73,7 +89,10 @@ router.get('/read', (req, res) => {
     const ext = path.extname(resolved).toLowerCase();
     const editable = config.editableExtensions.includes(ext);
     const content = fs.readFileSync(resolved, 'utf-8');
-    res.json({ path: resolved, content, editable, size: stat.size, ext });
+    // Check if a backup exists for this file
+    const backupPath = resolved + BACKUP_EXT;
+    const hasBackup = fs.existsSync(backupPath);
+    res.json({ path: resolved, content, editable, size: stat.size, ext, hasBackup });
   } catch (err) { console.error('read error:', err); res.status(500).json({ error: 'internal error' }); }
 });
 
@@ -90,9 +109,45 @@ router.post('/write', (req, res) => {
   if (!config.editableExtensions.includes(ext))
     return res.status(403).json({ error: 'file type not editable' });
   try {
+    // Back up the current file before overwriting (only if no backup exists yet —
+    // preserves the true original across multiple saves in one session)
+    const backupPath = resolved + BACKUP_EXT;
+    if (!fs.existsSync(backupPath)) {
+      fs.copyFileSync(resolved, backupPath);
+    }
     fs.writeFileSync(resolved, content, 'utf-8');
-    res.json({ ok: true, path: resolved });
+    res.json({ ok: true, path: resolved, backup: backupPath });
   } catch (err) { console.error('write error:', err); res.status(500).json({ error: 'internal error' }); }
+});
+
+// POST /api/files/restore  — restore from .panelbak, then delete the backup
+router.post('/restore', (req, res) => {
+  const { filePath } = req.body;
+  if (!filePath) return res.status(400).json({ error: 'filePath required' });
+  const resolved = resolve(filePath);
+  if (!resolved) return res.status(403).json({ error: 'path not allowed' });
+  const backupPath = resolved + BACKUP_EXT;
+  if (!fs.existsSync(backupPath))
+    return res.status(404).json({ error: 'no backup found for this file' });
+  try {
+    const backupContent = fs.readFileSync(backupPath, 'utf-8');
+    fs.writeFileSync(resolved, backupContent, 'utf-8');
+    fs.unlinkSync(backupPath);
+    res.json({ ok: true, path: resolved, restored: true });
+  } catch (err) { console.error('restore error:', err); res.status(500).json({ error: 'internal error' }); }
+});
+
+// DELETE /api/files/backup — discard the backup (call after intentional save is confirmed)
+router.delete('/backup', (req, res) => {
+  const { filePath } = req.body;
+  if (!filePath) return res.status(400).json({ error: 'filePath required' });
+  const resolved = resolve(filePath);
+  if (!resolved) return res.status(403).json({ error: 'path not allowed' });
+  const backupPath = resolved + BACKUP_EXT;
+  try {
+    if (fs.existsSync(backupPath)) fs.unlinkSync(backupPath);
+    res.json({ ok: true });
+  } catch (err) { console.error('backup delete error:', err); res.status(500).json({ error: 'internal error' }); }
 });
 
 module.exports = router;
