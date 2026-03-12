@@ -28,6 +28,8 @@ function tokenAuth(req, res, next) {
 const filesRouter = require('./routes/files');
 const pm2Router = require('./routes/pm2');
 const healthRouter = require('./routes/health');
+const systemRouter = require('./routes/system');
+const dockerRouter = require('./routes/docker');
 
 const app = express();
 
@@ -42,6 +44,8 @@ app.use(express.static(path.join(__dirname, '../public')));
 app.use('/api/files', tokenAuth, filesRouter);
 app.use('/api/pm2', tokenAuth, pm2Router);
 app.use('/api/health', tokenAuth, healthRouter);
+app.use('/api/system', tokenAuth, systemRouter);
+app.use('/api/docker', tokenAuth, dockerRouter);
 
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, '../public/index.html'));

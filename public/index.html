@@ -48,7 +48,7 @@
     .btn.warn:hover { background: rgba(240,194,74,0.12); }
     .btn.sm { padding: 3px 8px; font-size: 10px; }
     .btn:disabled { opacity: 0.4; cursor: default; pointer-events: none; }
-    #panel-health .content, #panel-pm2 .content { padding: 20px; flex: 1; overflow-y: auto; }
+    #panel-health .content, #panel-pm2 .content, #panel-resources .content, #panel-docker .content { padding: 20px; flex: 1; overflow-y: auto; }
     .service-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 10px; }
     .service-card { background: var(--surface); border: 1px solid var(--border); border-radius: 4px; padding: 14px 16px; display: flex; flex-direction: column; gap: 6px; }
     .service-card.up { border-left: 3px solid var(--accent); }
@@ -115,6 +115,24 @@
     .toast.success { border-color: var(--accent2); color: var(--accent); }
     .toast.error { border-color: rgba(240,85,85,0.5); color: var(--danger); }
     @keyframes slideIn { from { transform: translateY(10px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+    /* ── Resources panel ── */
+    .res-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
+    .res-card { background: var(--surface); border: 1px solid var(--border); border-radius: 4px; padding: 16px 18px; }
+    .res-card-title { font-family: var(--mono); font-size: 9px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: var(--dim); margin-bottom: 12px; }
+    .res-row { margin-bottom: 10px; }
+    .res-row:last-child { margin-bottom: 0; }
+    .res-label { font-family: var(--mono); font-size: 10px; color: var(--dim); margin-bottom: 3px; display: flex; justify-content: space-between; }
+    .res-bar-wrap { background: var(--border); border-radius: 2px; height: 5px; }
+    .res-bar { height: 100%; border-radius: 2px; background: var(--accent); transition: width 0.4s; }
+    .res-bar.warn { background: var(--warn); }
+    .res-bar.danger { background: var(--danger); }
+    /* ── Diff viewer ── */
+    #diff-view { max-height: 220px; overflow-y: auto; background: var(--bg); border: 1px solid var(--border); border-radius: 3px; margin-top: 4px; }
+    .diff-line { padding: 1px 10px; white-space: pre-wrap; word-break: break-all; font-family: var(--mono); font-size: 10px; line-height: 1.5; }
+    .diff-line.add { background: rgba(74,240,176,0.08); color: var(--accent); }
+    .diff-line.del { background: rgba(240,85,85,0.08); color: var(--danger); }
+    .diff-line.ctx { color: var(--dim); }
+    .diff-line.skip { color: var(--border2); font-style: italic; text-align: center; padding: 2px 10px; }
     ::-webkit-scrollbar { width: 5px; height: 5px; }
     ::-webkit-scrollbar-track { background: transparent; }
     ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
@@ -128,6 +146,7 @@
     <div class="confirm-title">⚠ confirm save</div>
     <div class="confirm-path" id="confirm-path-display"></div>
     <div style="font-size:11px;color:var(--dim)">This will overwrite the file on disk. The original will be preserved as a backup until you explicitly discard it.</div>
+    <div id="diff-view"></div>
     <div class="confirm-actions">
       <button class="btn sm" id="confirm-cancel-btn">cancel</button>
       <button class="btn sm primary" id="confirm-save-btn">save</button>
@@ -150,8 +169,14 @@
     </div>
     <div class="nav-section">
       <div class="nav-label">System</div>
+      <div class="nav-item" data-panel="resources" onclick="navigate('resources', this)">
+        <span class="icon">◈</span> Resources
+      </div>
       <div class="nav-item" data-panel="pm2" onclick="navigate('pm2', this)">
         <span class="icon">⬡</span> PM2 Processes <span class="badge" id="badge-pm2">—</span>
+      </div>
+      <div class="nav-item" data-panel="docker" onclick="navigate('docker', this)">
+        <span class="icon">⬡</span> Docker <span class="badge" id="badge-docker">—</span>
       </div>
       <div class="nav-item" data-panel="logs" onclick="navigate('logs', this)">
         <span class="icon">≡</span> Process Logs
@@ -174,6 +199,20 @@
         <div class="service-grid" id="service-grid"><div class="loading">checking services…</div></div>
         <p id="health-updated" style="margin-top:14px;font-family:var(--mono);font-size:10px;color:var(--dim)"></p>
       </div>
+    </div>
+    <div id="panel-resources" class="panel">
+      <div class="panel-header">
+        <span class="panel-title">resources</span><span class="panel-subtitle">system metrics</span>
+        <div class="panel-actions"><button class="btn sm" onclick="loadSystem()">↺ refresh</button></div>
+      </div>
+      <div class="content" id="resources-content"><div class="loading">loading…</div></div>
+    </div>
+    <div id="panel-docker" class="panel">
+      <div class="panel-header">
+        <span class="panel-title">docker</span><span class="panel-subtitle">containers</span>
+        <div class="panel-actions"><button class="btn sm" onclick="loadDocker()">↺ refresh</button></div>
+      </div>
+      <div class="content"><div id="docker-content"><div class="loading">loading…</div></div></div>
     </div>
     <div id="panel-pm2" class="panel">
       <div class="panel-header">
@@ -264,7 +303,9 @@ function navigate(panel, el) {
   document.getElementById('panel-' + panel).classList.add('active');
   el.classList.add('active');
   if (panel === 'health') loadHealth();
+  if (panel === 'resources') loadSystem();
   if (panel === 'pm2') loadPM2();
+  if (panel === 'docker') loadDocker();
   if (panel === 'logs') initLogs();
   if (panel === 'files') loadFileRoots();
 }
@@ -540,6 +581,8 @@ function revertChanges() {
 function requestSave() {
   if (!currentFile || !editorDirty) return;
   document.getElementById('confirm-path-display').textContent = currentFile;
+  const current = document.getElementById('editor-textarea').value;
+  document.getElementById('diff-view').innerHTML = renderDiff(computeDiff(originalContent || '', current));
   document.getElementById('confirm-overlay').classList.add('visible');
 }
 
@@ -608,6 +651,139 @@ document.addEventListener('keydown', e => {
     document.getElementById('confirm-overlay').classList.remove('visible');
   }
 });
+
+// ── System Resources ─────────────────────────────────────────────────────────
+async function loadSystem() {
+  const content = document.getElementById('resources-content');
+  if (!content.dataset.loaded) content.innerHTML = '<div class="loading">loading…</div>';
+  try {
+    const data = await (await fetch('/api/system')).json();
+    renderSystem(data);
+    content.dataset.loaded = '1';
+  } catch (e) {
+    content.innerHTML = `<div class="error-msg">${e.message}</div>`;
+  }
+}
+
+function renderSystem(d) {
+  const { cpu, memory, disks, uptime } = d;
+  function pct(used, total) { return total ? Math.round(used / total * 100) : 0; }
+  function barCls(p) { return p > 85 ? 'danger' : p > 65 ? 'warn' : ''; }
+  const uptimeDays = Math.floor(uptime / 86400);
+  const uptimeHours = Math.floor((uptime % 86400) / 3600);
+  const uptimeMins = Math.floor((uptime % 3600) / 60);
+  const uptimeStr = uptimeDays > 0 ? `${uptimeDays}d ${uptimeHours}h` : `${uptimeHours}h ${uptimeMins}m`;
+  const cpuPct1 = Math.min(100, Math.round(cpu.load1 / cpu.cores * 100));
+  const cpuPct5 = Math.min(100, Math.round(cpu.load5 / cpu.cores * 100));
+  const cpuPct15 = Math.min(100, Math.round(cpu.load15 / cpu.cores * 100));
+  const memPct = pct(memory.used, memory.total);
+  const diskCards = disks.map(disk => {
+    const p = pct(disk.used, disk.total);
+    return `<div class="res-row">
+      <div class="res-label"><span>${escHtml(disk.mount)}</span><span>${fmtBytes(disk.free)} free · ${p}%</span></div>
+      <div class="res-bar-wrap"><div class="res-bar ${barCls(p)}" style="width:${p}%"></div></div>
+    </div>`;
+  }).join('');
+  document.getElementById('resources-content').innerHTML = `
+    <div class="res-grid">
+      <div class="res-card">
+        <div class="res-card-title">CPU · ${cpu.cores} cores · uptime ${uptimeStr}</div>
+        <div class="res-row">
+          <div class="res-label"><span>load 1m</span><span>${cpu.load1.toFixed(2)} (${cpuPct1}%)</span></div>
+          <div class="res-bar-wrap"><div class="res-bar ${barCls(cpuPct1)}" style="width:${cpuPct1}%"></div></div>
+        </div>
+        <div class="res-row">
+          <div class="res-label"><span>load 5m</span><span>${cpu.load5.toFixed(2)} (${cpuPct5}%)</span></div>
+          <div class="res-bar-wrap"><div class="res-bar ${barCls(cpuPct5)}" style="width:${cpuPct5}%"></div></div>
+        </div>
+        <div class="res-row">
+          <div class="res-label"><span>load 15m</span><span>${cpu.load15.toFixed(2)} (${cpuPct15}%)</span></div>
+          <div class="res-bar-wrap"><div class="res-bar ${barCls(cpuPct15)}" style="width:${cpuPct15}%"></div></div>
+        </div>
+      </div>
+      <div class="res-card">
+        <div class="res-card-title">Memory</div>
+        <div class="res-row">
+          <div class="res-label"><span>used</span><span>${fmtBytes(memory.used)} / ${fmtBytes(memory.total)} · ${memPct}%</span></div>
+          <div class="res-bar-wrap"><div class="res-bar ${barCls(memPct)}" style="width:${memPct}%"></div></div>
+        </div>
+        <div style="font-family:var(--mono);font-size:10px;color:var(--dim)">${fmtBytes(memory.free)} free</div>
+      </div>
+      ${disks.length ? `<div class="res-card"><div class="res-card-title">Disk</div>${diskCards}</div>` : ''}
+    </div>`;
+}
+
+// ── Docker Containers ─────────────────────────────────────────────────────────
+async function loadDocker() {
+  document.getElementById('docker-content').innerHTML = '<div class="loading">loading…</div>';
+  try {
+    const containers = await (await fetch('/api/docker/containers')).json();
+    if (containers.error) throw new Error(containers.error);
+    const running = containers.filter(c => c.state === 'running').length;
+    const badge = document.getElementById('badge-docker');
+    badge.textContent = `${running}/${containers.length}`;
+    badge.className = 'badge ' + (running === containers.length ? 'up' : 'warn');
+    document.getElementById('docker-content').innerHTML = `
+      <table class="pm2-table">
+        <thead><tr><th>name</th><th>image</th><th>state</th><th>status</th></tr></thead>
+        <tbody>${containers.map(c => `
+          <tr>
+            <td class="pm2-name">${escHtml(c.name)}</td>
+            <td class="pm2-mono" style="font-size:10px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(c.image)}</td>
+            <td><span class="pm2-status ${c.state === 'running' ? 'online' : c.state === 'exited' ? 'stopped' : 'errored'}">${escHtml(c.state)}</span></td>
+            <td class="pm2-mono">${escHtml(c.status)}</td>
+          </tr>`).join('')}
+        </tbody>
+      </table>`;
+  } catch (e) {
+    document.getElementById('docker-content').innerHTML = `<div class="error-msg">${e.message}</div>`;
+  }
+}
+
+// ── Diff ──────────────────────────────────────────────────────────────────────
+function computeDiff(oldText, newText) {
+  const a = oldText.split('\n'), b = newText.split('\n');
+  if (a.length + b.length > 3000) return null;
+  const m = a.length, n = b.length;
+  const dp = Array.from({ length: m + 1 }, () => new Int32Array(n + 1));
+  for (let i = m - 1; i >= 0; i--)
+    for (let j = n - 1; j >= 0; j--)
+      dp[i][j] = a[i] === b[j] ? dp[i+1][j+1] + 1 : Math.max(dp[i+1][j], dp[i][j+1]);
+  const hunks = [];
+  let i = 0, j = 0;
+  while (i < m || j < n) {
+    if (i < m && j < n && a[i] === b[j]) { hunks.push({ t: '=', l: a[i] }); i++; j++; }
+    else if (j < n && (i >= m || dp[i][j+1] >= dp[i+1][j])) { hunks.push({ t: '+', l: b[j] }); j++; }
+    else { hunks.push({ t: '-', l: a[i] }); i++; }
+  }
+  return hunks;
+}
+
+function renderDiff(hunks) {
+  if (!hunks) return '<div class="diff-line skip">(file too large to diff)</div>';
+  const CONTEXT = 3;
+  const changed = new Set();
+  hunks.forEach((h, i) => { if (h.t !== '=') changed.add(i); });
+  if (changed.size === 0) return '<div class="diff-line ctx" style="color:var(--accent);padding:6px 10px">no changes</div>';
+  const visible = new Set();
+  changed.forEach(i => {
+    for (let k = Math.max(0, i - CONTEXT); k <= Math.min(hunks.length - 1, i + CONTEXT); k++) visible.add(k);
+  });
+  const adds = hunks.filter(h => h.t === '+').length;
+  const dels = hunks.filter(h => h.t === '-').length;
+  const sorted = [...visible].sort((a, b) => a - b);
+  let html = `<div style="padding:4px 10px;font-size:10px;color:var(--dim);border-bottom:1px solid var(--border);font-family:var(--mono)">+${adds} −${dels}</div>`;
+  let last = -1;
+  for (const idx of sorted) {
+    if (last !== -1 && idx > last + 1) html += `<div class="diff-line skip">···</div>`;
+    const h = hunks[idx];
+    const cls = h.t === '+' ? 'add' : h.t === '-' ? 'del' : 'ctx';
+    const prefix = h.t === '+' ? '+' : h.t === '-' ? '-' : ' ';
+    html += `<div class="diff-line ${cls}">${prefix} ${escHtml(h.l)}</div>`;
+    last = idx;
+  }
+  return html;
+}
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
 loadHealth();
