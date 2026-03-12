@@ -6,6 +6,8 @@ const config = require('../../config/config');
 
 const router = express.Router();
 let cache = {};
+let history = {};   // { label: [{ status, latency, ts }, ...] }
+const HISTORY_MAX = 20;
 let lastCheck = 0;
 
 function httpPing(url, timeoutMs = 5000) {
@@ -47,6 +49,11 @@ async function runChecks() {
   }));
   cache = results;
   lastCheck = Date.now();
+  Object.values(results).forEach(svc => {
+    if (!history[svc.label]) history[svc.label] = [];
+    history[svc.label].push({ status: svc.status, latency: svc.latency, ts: svc.checkedAt });
+    if (history[svc.label].length > HISTORY_MAX) history[svc.label].shift();
+  });
 }
 
 let started = false;
@@ -62,14 +69,16 @@ function startChecks() {
 router.get('/', async (req, res) => {
   startChecks();
   if (!lastCheck || Date.now() - lastCheck > config.healthCheckInterval * 2) await runChecks();
-  res.json({ services: Object.values(cache), lastCheck, nextCheck: lastCheck + config.healthCheckInterval });
+  const services = Object.values(cache).map(svc => ({ ...svc, history: history[svc.label] || [] }));
+  res.json({ services, lastCheck, nextCheck: lastCheck + config.healthCheckInterval });
 });
 
 // POST /api/health/refresh
 router.post('/refresh', async (req, res) => {
   startChecks();
   await runChecks();
-  res.json({ ok: true, services: Object.values(cache), lastCheck });
+  const services = Object.values(cache).map(svc => ({ ...svc, history: history[svc.label] || [] }));
+  res.json({ ok: true, services, lastCheck });
 });
 
 module.exports = router;

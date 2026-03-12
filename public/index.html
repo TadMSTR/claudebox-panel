@@ -106,7 +106,12 @@
     #confirm-box .confirm-path { font-family: var(--mono); font-size: 10px; color: var(--dim); word-break: break-all; }
     #confirm-box .confirm-actions { display: flex; gap: 8px; justify-content: flex-end; }
     #panel-logs .content { padding: 16px 20px; flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; }
-    .log-selector { display: flex; gap: 8px; align-items: center; }
+    .hist-dots { display: flex; gap: 2px; margin-top: 2px; }
+    .hist-dot { width: 5px; height: 5px; border-radius: 50%; flex-shrink: 0; cursor: default; }
+    .hist-dot.up { background: var(--accent2); }
+    .hist-dot.down { background: var(--danger); }
+    .hist-dot.unknown { background: var(--dim); }
+    .log-selector { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
     .log-select { background: var(--surface); border: 1px solid var(--border2); color: var(--text); font-family: var(--mono); font-size: 11px; padding: 5px 10px; border-radius: 3px; outline: none; }
     .log-select:focus { border-color: var(--accent); }
     #log-output { flex: 1; background: var(--surface); border: 1px solid var(--border); border-radius: 4px; padding: 12px 16px; font-family: var(--mono); font-size: 11px; line-height: 1.6; overflow-y: auto; white-space: pre-wrap; word-break: break-all; color: var(--text); min-height: 200px; }
@@ -237,6 +242,8 @@
             <option value="50">50 lines</option><option value="100" selected>100 lines</option>
             <option value="250">250 lines</option><option value="500">500 lines</option>
           </select>
+          <input type="text" class="log-select" id="log-search" placeholder="filter…" oninput="applyLogFilter()" style="flex:1;min-width:80px">
+          <button class="btn sm" id="log-search-clear" onclick="clearLogSearch()" style="display:none" title="Clear filter">✕</button>
         </div>
         <pre id="log-output">← select a process</pre>
       </div>
@@ -336,15 +343,21 @@ function renderHealth(data) {
   const badge = document.getElementById('badge-health');
   badge.textContent = `${upCount}/${services.length}`;
   badge.className = 'badge ' + (downCount > 0 ? 'warn' : 'up');
-  document.getElementById('service-grid').innerHTML = services.map(svc => `
+  document.getElementById('service-grid').innerHTML = services.map(svc => {
+    const dots = (svc.history || []).map(h =>
+      `<span class="hist-dot ${h.status}" title="${new Date(h.ts).toLocaleTimeString()}: ${h.status}${h.latency != null ? ' · ' + h.latency + 'ms' : ''}"></span>`
+    ).join('');
+    return `
     <div class="service-card ${svc.status}">
       <div class="service-name">${escHtml(svc.label)}</div>
       <div class="service-meta">
         <div class="status-dot ${svc.status}"></div><span>${svc.status}</span>
         ${svc.latency != null ? `<span style="margin-left:auto;font-size:10px">${svc.latency}ms</span>` : ''}
       </div>
+      ${dots ? `<div class="hist-dots">${dots}</div>` : ''}
       ${svc.link ? `<a class="service-link" href="${escHtml(svc.link)}" target="_blank">↗ open</a>` : ''}
-    </div>`).join('');
+    </div>`;
+  }).join('');
   if (data.lastCheck)
     document.getElementById('health-updated').textContent = 'last checked ' + new Date(data.lastCheck).toLocaleTimeString();
 }
@@ -392,6 +405,8 @@ async function pm2Action(action, name) {
 }
 
 // ── Logs ─────────────────────────────────────────────────────────────────────
+let rawLogText = '';
+
 function initLogs() {
   if (pm2Processes.length === 0) fetch('/api/pm2/list').then(r=>r.json()).then(p => { pm2Processes = p; populateLogSelect(p); });
 }
@@ -407,9 +422,24 @@ async function loadLog() {
   if (!name) return; out.textContent = 'loading…';
   try {
     const data = await (await fetch(`/api/pm2/logs?name=${encodeURIComponent(name)}&lines=${lines}`)).json();
-    out.textContent = (stream === 'stderr' ? data.stderr : data.stdout) || '(empty)';
+    rawLogText = (stream === 'stderr' ? data.stderr : data.stdout) || '(empty)';
+    applyLogFilter();
     out.scrollTop = out.scrollHeight;
   } catch (e) { out.textContent = 'error: ' + e.message; }
+}
+function applyLogFilter() {
+  const filter = document.getElementById('log-search').value;
+  const out = document.getElementById('log-output');
+  const clearBtn = document.getElementById('log-search-clear');
+  clearBtn.style.display = filter ? 'inline-block' : 'none';
+  if (!filter || !rawLogText) { out.textContent = rawLogText; return; }
+  const lower = filter.toLowerCase();
+  const matched = rawLogText.split('\n').filter(l => l.toLowerCase().includes(lower));
+  out.textContent = matched.length ? matched.join('\n') : '(no lines match)';
+}
+function clearLogSearch() {
+  document.getElementById('log-search').value = '';
+  applyLogFilter();
 }
 
 // ── File Tree ─────────────────────────────────────────────────────────────────
