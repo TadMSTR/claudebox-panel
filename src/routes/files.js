@@ -29,10 +29,16 @@ function isAllowedBackup(resolvedPath) {
 }
 
 function resolve(requestedPath) {
-  // For .panelbak files, the original may not exist (was deleted), so use path.resolve + manual check
+  // For .panelbak files, the file itself may not exist yet (write hasn't happened), so we can't
+  // realpathSync the full path. Instead, realpathSync the parent directory (which must exist) and
+  // reconstruct — this dereferences any symlinks in the directory hierarchy without requiring the
+  // backup file itself to be present.
   if (requestedPath.endsWith(BACKUP_EXT)) {
     const abs = path.resolve(requestedPath);
-    if (isAllowedBackup(abs)) return abs;
+    let parentReal;
+    try { parentReal = fs.realpathSync(path.dirname(abs)); } catch (_) { return null; }
+    const resolved = path.join(parentReal, path.basename(abs));
+    if (isAllowedBackup(resolved)) return resolved;
     return null;
   }
   try {

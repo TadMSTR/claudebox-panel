@@ -143,6 +143,14 @@
     ::-webkit-scrollbar-track { background: transparent; }
     ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
     ::-webkit-scrollbar-thumb:hover { background: var(--dim); }
+    /* ── Scale control ── */
+    .scale-ctrl { display: flex; gap: 3px; }
+    .scale-btn { font-family: var(--mono); font-size: 9px; padding: 3px 7px; border: 1px solid var(--border2); border-radius: 3px; background: transparent; color: var(--dim); cursor: pointer; transition: all 0.15s; }
+    .scale-btn:hover { color: var(--accent); border-color: var(--accent); }
+    .scale-btn.active { color: var(--accent); border-color: var(--accent2); background: rgba(74,240,176,0.08); }
+    /* ── PM2 sections ── */
+    .pm2-section { margin-bottom: 24px; }
+    .pm2-section-label { font-family: var(--mono); font-size: 9px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: var(--dim); padding-bottom: 8px; border-bottom: 1px solid var(--border); margin-bottom: 2px; }
   </style>
 </head>
 <body>
@@ -164,6 +172,11 @@
   <div id="topbar">
     <div class="logo">claudebox<span>/</span>panel</div>
     <div class="spacer"></div>
+    <div class="scale-ctrl" title="UI scale">
+      <button class="scale-btn" data-scale="85" onclick="setScale(85)">85%</button>
+      <button class="scale-btn" data-scale="100" onclick="setScale(100)">100%</button>
+      <button class="scale-btn" data-scale="120" onclick="setScale(120)">120%</button>
+    </div>
     <div class="clock" id="clock"></div>
   </div>
   <div id="sidebar">
@@ -186,6 +199,9 @@
       </div>
       <div class="nav-item" data-panel="logs" onclick="navigate('logs', this)">
         <span class="icon">≡</span> Process Logs
+      </div>
+      <div class="nav-item" data-panel="backrest" onclick="navigate('backrest', this)">
+        <span class="icon">◈</span> Backrest
       </div>
     </div>
     <div class="nav-section">
@@ -248,6 +264,20 @@
         <pre id="log-output">← select a process</pre>
       </div>
     </div>
+    <div id="panel-backrest" class="panel">
+      <div class="panel-header">
+        <span class="panel-title">backrest</span><span class="panel-subtitle">backup operations</span>
+        <div class="panel-actions">
+          <select class="log-select" id="backrest-limit-select" onchange="loadBackrest()">
+            <option value="10">10 jobs</option>
+            <option value="20" selected>20 jobs</option>
+            <option value="50">50 jobs</option>
+          </select>
+          <button class="btn sm" onclick="loadBackrest()">↺ refresh</button>
+        </div>
+      </div>
+      <div class="content"><div id="backrest-content"><div class="loading">loading…</div></div></div>
+    </div>
     <div id="panel-files" class="panel">
       <div id="file-tree">
         <div id="file-tree-header" style="display:flex;align-items:center;gap:8px">
@@ -292,7 +322,7 @@ let hideSampleFiles = true;
 function escHtml(s) {
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
-function esc(s) { return s.replace(/'/g,"\\'"); }
+function esc(s) { return s.replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/'/g,"\\'"); }
 function fmtBytes(b) { if (b<1024) return b+'B'; if (b<1048576) return (b/1024).toFixed(1)+'KB'; return (b/1048576).toFixed(1)+'MB'; }
 function fmtUptime(ts) { const s=Math.floor((Date.now()-ts)/1000); if(s<60)return s+'s'; if(s<3600)return Math.floor(s/60)+'m'; if(s<86400)return Math.floor(s/3600)+'h'; return Math.floor(s/86400)+'d'; }
 function fileIcon(ext) { return {'.md':'◎','.sh':'⚡','.conf':'⚙','.json':'{}','.yaml':'⚙','.yml':'⚙','.js':'⬡','.ts':'⬡','.env':'⚿','.txt':'◎','.log':'≡'}[ext]||'◦'; }
@@ -320,6 +350,7 @@ function navigate(panel, el) {
   if (panel === 'docker') loadDocker();
   if (panel === 'logs') initLogs();
   if (panel === 'files') loadFileRoots();
+  if (panel === 'backrest') loadBackrest();
 }
 
 // ── Clock ────────────────────────────────────────────────────────────────────
@@ -371,27 +402,60 @@ async function loadPM2() {
     const badge = document.getElementById('badge-pm2');
     badge.textContent = `${onlineCount}/${pm2Processes.length}`;
     badge.className = 'badge ' + (onlineCount === pm2Processes.length ? 'up' : 'warn');
-    document.getElementById('pm2-content').innerHTML = `
-      <table class="pm2-table">
-        <thead><tr><th>name</th><th>status</th><th>pid</th><th>restarts</th><th>cpu</th><th>mem</th><th>uptime</th><th>actions</th></tr></thead>
-        <tbody>${pm2Processes.map(p => `
-          <tr>
-            <td class="pm2-name">${escHtml(p.name)}</td>
-            <td><span class="pm2-status ${p.status}">${escHtml(p.status)}</span></td>
-            <td class="pm2-mono">${p.pid || '—'}</td>
-            <td class="pm2-mono">${p.restarts ?? '—'}</td>
-            <td class="pm2-mono">${p.cpu != null ? p.cpu + '%' : '—'}</td>
-            <td class="pm2-mono">${p.memory != null ? fmtBytes(p.memory) : '—'}</td>
-            <td class="pm2-mono">${p.uptime ? fmtUptime(p.uptime) : '—'}</td>
-            <td><div class="pm2-actions">
-              <button class="btn sm" onclick="pm2Action('restart','${escHtml(p.name)}')">restart</button>
-              <button class="btn sm" onclick="pm2Action('${p.status==='online'?'stop':'restart'}','${escHtml(p.name)}')">
-                ${p.status === 'online' ? 'stop' : 'start'}
-              </button>
-            </div></td>
-          </tr>`).join('')}
-        </tbody>
-      </table>`;
+
+    const always    = pm2Processes.filter(p => !p.cron);
+    const scheduled = pm2Processes.filter(p => p.cron);
+
+    const alwaysRows = always.map(p => `
+      <tr>
+        <td class="pm2-name">${escHtml(p.name)}</td>
+        <td><span class="pm2-status ${p.status}">${escHtml(p.status)}</span></td>
+        <td class="pm2-mono">${p.pid || '—'}</td>
+        <td class="pm2-mono">${p.restarts ?? '—'}</td>
+        <td class="pm2-mono">${p.cpu != null ? p.cpu + '%' : '—'}</td>
+        <td class="pm2-mono">${p.memory != null ? fmtBytes(p.memory) : '—'}</td>
+        <td class="pm2-mono">${p.uptime ? fmtUptime(p.uptime) : '—'}</td>
+        <td><div class="pm2-actions">
+          <button class="btn sm" onclick="pm2Action('restart','${esc(p.name)}')">restart</button>
+          <button class="btn sm" onclick="pm2Action('${p.status==='online'?'stop':'restart'}','${esc(p.name)}')">
+            ${p.status === 'online' ? 'stop' : 'start'}
+          </button>
+        </div></td>
+      </tr>`).join('');
+
+    const scheduledRows = scheduled.map(p => `
+      <tr>
+        <td class="pm2-name">${escHtml(p.name)}</td>
+        <td><span class="pm2-status ${p.status}">${escHtml(p.status)}</span></td>
+        <td class="pm2-mono">${p.restarts ?? '—'}</td>
+        <td class="pm2-mono">${p.cpu != null ? p.cpu + '%' : '—'}</td>
+        <td class="pm2-mono">${p.memory != null ? fmtBytes(p.memory) : '—'}</td>
+        <td class="pm2-mono">${p.uptime ? fmtUptime(p.uptime) : '—'}</td>
+        <td class="pm2-mono" style="font-size:10px;color:var(--dim)">${escHtml(p.cron)}</td>
+        <td><div class="pm2-actions">
+          <button class="btn sm" onclick="pm2Action('restart','${esc(p.name)}')">run now</button>
+        </div></td>
+      </tr>`).join('');
+
+    let html = '';
+    if (always.length) html += `
+      <div class="pm2-section">
+        <div class="pm2-section-label">always on (${always.length})</div>
+        <table class="pm2-table">
+          <thead><tr><th>name</th><th>status</th><th>pid</th><th>restarts</th><th>cpu</th><th>mem</th><th>uptime</th><th>actions</th></tr></thead>
+          <tbody>${alwaysRows}</tbody>
+        </table>
+      </div>`;
+    if (scheduled.length) html += `
+      <div class="pm2-section">
+        <div class="pm2-section-label">scheduled (${scheduled.length})</div>
+        <table class="pm2-table">
+          <thead><tr><th>name</th><th>status</th><th>runs</th><th>cpu</th><th>mem</th><th>last run</th><th>schedule</th><th>actions</th></tr></thead>
+          <tbody>${scheduledRows}</tbody>
+        </table>
+      </div>`;
+
+    document.getElementById('pm2-content').innerHTML = html;
     populateLogSelect(pm2Processes);
   } catch (e) { document.getElementById('pm2-content').innerHTML = `<div class="error-msg">${e.message}</div>`; }
 }
@@ -837,6 +901,56 @@ function renderDiff(hunks) {
     last = idx;
   }
   return html;
+}
+
+// ── Scale ─────────────────────────────────────────────────────────────────────
+function setScale(pct) {
+  document.documentElement.style.zoom = pct + '%';
+  localStorage.setItem('panelScale', pct);
+  document.querySelectorAll('.scale-btn').forEach(b => {
+    b.classList.toggle('active', parseInt(b.dataset.scale) === pct);
+  });
+}
+(function() { setScale(parseInt(localStorage.getItem('panelScale')) || 100); })();
+
+// ── Backrest ──────────────────────────────────────────────────────────────────
+async function loadBackrest() {
+  document.getElementById('backrest-content').innerHTML = '<div class="loading">loading…</div>';
+  try {
+    const limit = document.getElementById('backrest-limit-select').value;
+    const data = await (await fetch(`/api/backrest/operations?limit=${limit}`)).json();
+    if (data.error) throw new Error(data.error);
+    const ops = data.operations || [];
+    if (!ops.length) {
+      document.getElementById('backrest-content').innerHTML = '<div class="loading">no operations found</div>';
+      return;
+    }
+    document.getElementById('backrest-content').innerHTML = `
+      <table class="pm2-table">
+        <thead><tr><th>status</th><th>plan</th><th>repo</th><th>started</th><th>duration</th><th>details</th></tr></thead>
+        <tbody>${ops.map(op => {
+          const startMs = op.unixTimeStartMs ? Number(op.unixTimeStartMs) : null;
+          const endMs   = op.unixTimeEndMs   ? Number(op.unixTimeEndMs)   : null;
+          const startStr = startMs ? new Date(startMs).toLocaleString() : '—';
+          const durSec   = (startMs && endMs) ? Math.round((endMs - startMs) / 1000) : null;
+          const durStr   = durSec != null ? (durSec >= 60 ? Math.floor(durSec/60)+'m '+durSec%60+'s' : durSec+'s') : '—';
+          const status   = (op.status ?? 'unknown').replace('STATUS_', '').toLowerCase();
+          const cls      = status === 'success' ? 'online' : status === 'error' ? 'errored' : status === 'inprogress' ? 'warn' : 'stopped';
+          return `
+            <tr>
+              <td><span class="pm2-status ${cls}">${escHtml(status)}</span></td>
+              <td class="pm2-mono">${escHtml(op.planId || '—')}</td>
+              <td class="pm2-mono">${escHtml(op.repoId || '—')}</td>
+              <td class="pm2-mono" style="font-size:10px">${escHtml(startStr)}</td>
+              <td class="pm2-mono">${escHtml(durStr)}</td>
+              <td class="pm2-mono" style="font-size:10px;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(op.displayMessage || '—')}</td>
+            </tr>`;
+        }).join('')}
+        </tbody>
+      </table>`;
+  } catch (e) {
+    document.getElementById('backrest-content').innerHTML = `<div class="error-msg">${e.message}</div>`;
+  }
 }
 
 // ── Boot ──────────────────────────────────────────────────────────────────────

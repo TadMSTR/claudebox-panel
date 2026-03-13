@@ -11,7 +11,10 @@ function dockerGet(path) {
       headers: { Host: 'localhost' },
     }, res => {
       let body = '';
-      res.on('data', c => body += c);
+      res.on('data', c => {
+        body += c;
+        if (body.length > 2 * 1024 * 1024) { req.destroy(); reject(new Error('Docker response too large')); }
+      });
       res.on('end', () => { try { resolve(JSON.parse(body)); } catch (e) { reject(e); } });
     });
     req.on('error', reject);

@@ -1,5 +1,6 @@
 const express = require('express');
 const cors = require('cors');
+const rateLimit = require('express-rate-limit');
 const path = require('path');
 const fs = require('fs');
 const config = require('../config/config');
@@ -25,11 +26,12 @@ function tokenAuth(req, res, next) {
   res.status(401).json({ error: 'unauthorized' });
 }
 
-const filesRouter = require('./routes/files');
-const pm2Router = require('./routes/pm2');
-const healthRouter = require('./routes/health');
-const systemRouter = require('./routes/system');
-const dockerRouter = require('./routes/docker');
+const filesRouter    = require('./routes/files');
+const pm2Router      = require('./routes/pm2');
+const healthRouter   = require('./routes/health');
+const systemRouter   = require('./routes/system');
+const dockerRouter   = require('./routes/docker');
+const backrestRouter = require('./routes/backrest');
 
 const app = express();
 
@@ -38,14 +40,27 @@ app.use(cors({
   methods: ['GET', 'POST', 'DELETE'],
   credentials: true,
 }));
+app.use((req, res, next) => {
+  res.setHeader('Content-Security-Policy',
+    "default-src 'self'; " +
+    "script-src 'self' 'unsafe-inline'; " +
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
+    "font-src https://fonts.gstatic.com; " +
+    "connect-src 'self'; " +
+    "img-src 'none'; frame-src 'none';"
+  );
+  next();
+});
 app.use(express.json({ limit: '1mb' }));
+app.use('/api', rateLimit({ windowMs: 60 * 1000, max: 120, standardHeaders: true, legacyHeaders: false }));
 app.use(express.static(path.join(__dirname, '../public')));
 
 app.use('/api/files', tokenAuth, filesRouter);
 app.use('/api/pm2', tokenAuth, pm2Router);
 app.use('/api/health', tokenAuth, healthRouter);
 app.use('/api/system', tokenAuth, systemRouter);
-app.use('/api/docker', tokenAuth, dockerRouter);
+app.use('/api/docker',   tokenAuth, dockerRouter);
+app.use('/api/backrest', tokenAuth, backrestRouter);
 
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, '../public/index.html'));

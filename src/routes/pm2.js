@@ -38,7 +38,7 @@ router.get('/list', async (req, res) => {
       return a.name.localeCompare(b.name);
     });
     res.json(processes);
-  } catch (err) { pm2.disconnect(); res.status(500).json({ error: err.message }); }
+  } catch (err) { pm2.disconnect(); console.error('pm2 list error:', err); res.status(500).json({ error: 'pm2 error' }); }
 });
 
 // Processes that cannot be stopped/reloaded from the panel (restart is OK)
@@ -69,7 +69,7 @@ router.post('/action', async (req, res) => {
     await pm2Action(action, name);
     pm2.disconnect();
     res.json({ ok: true, action, name });
-  } catch (err) { pm2.disconnect(); res.status(500).json({ error: err.message }); }
+  } catch (err) { pm2.disconnect(); console.error('pm2 action error:', err); res.status(500).json({ error: 'pm2 error' }); }
 });
 
 // GET /api/pm2/logs?name=<process>&lines=100
