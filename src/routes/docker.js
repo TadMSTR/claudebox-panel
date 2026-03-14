@@ -3,11 +3,21 @@ const http = require('http');
 
 const router = express.Router();
 
-function dockerGet(path) {
+const ALLOWED_DOCKER_PATHS = [
+  '/containers/json',
+  '/version',
+  '/info',
+];
+
+function dockerGet(apiPath) {
+  const basePath = apiPath.split('?')[0];
+  if (!ALLOWED_DOCKER_PATHS.includes(basePath)) {
+    return Promise.reject(new Error(`Docker API path not allowed: ${basePath}`));
+  }
   return new Promise((resolve, reject) => {
     const req = http.get({
       socketPath: '/var/run/docker.sock',
-      path,
+      path: apiPath,
       headers: { Host: 'localhost' },
     }, res => {
       let body = '';

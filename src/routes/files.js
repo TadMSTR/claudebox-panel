@@ -6,6 +6,7 @@ const config = require('../../config/config');
 const router = express.Router();
 
 const BACKUP_EXT = '.panelbak';
+const BACKUP_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 
 function getAllowedBases() {
   return config.filePaths.map(p => p.path);
@@ -155,5 +156,31 @@ router.delete('/backup', (req, res) => {
     res.json({ ok: true });
   } catch (err) { console.error('backup delete error:', err); res.status(500).json({ error: 'internal error' }); }
 });
+
+// Cleanup stale .panelbak files on startup
+(function cleanupOldBackups() {
+  const now = Date.now();
+  for (const entry of config.filePaths) {
+    if (entry.type !== 'dir') continue;
+    try {
+      const walk = [entry.path];
+      while (walk.length) {
+        const dir = walk.pop();
+        for (const d of fs.readdirSync(dir, { withFileTypes: true })) {
+          const full = path.join(dir, d.name);
+          if (d.isDirectory()) { walk.push(full); continue; }
+          if (!d.name.endsWith(BACKUP_EXT)) continue;
+          try {
+            const stat = fs.statSync(full);
+            if (now - stat.mtimeMs > BACKUP_MAX_AGE_MS) {
+              fs.unlinkSync(full);
+              console.log(`cleaned up stale backup: ${full}`);
+            }
+          } catch (_) {}
+        }
+      }
+    } catch (_) {}
+  }
+})();
 
 module.exports = router;

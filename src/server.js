@@ -1,5 +1,6 @@
 const express = require('express');
 const cors = require('cors');
+const crypto = require('crypto');
 const rateLimit = require('express-rate-limit');
 const path = require('path');
 const fs = require('fs');
@@ -9,8 +10,15 @@ const config = require('../config/config');
 const envPath = path.join(__dirname, '../.env');
 if (fs.existsSync(envPath)) {
   fs.readFileSync(envPath, 'utf-8').split('\n').forEach(line => {
-    const [key, ...rest] = line.split('=');
-    if (key && rest.length) process.env[key.trim()] = rest.join('=').trim();
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) return;
+    const eqIdx = trimmed.indexOf('=');
+    if (eqIdx === -1) return;
+    const key = trimmed.slice(0, eqIdx).trim();
+    let val = trimmed.slice(eqIdx + 1).trim();
+    if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'")))
+      val = val.slice(1, -1);
+    if (key) process.env[key] = val;
   });
 }
 
@@ -22,7 +30,10 @@ if (!PANEL_TOKEN) {
 
 function tokenAuth(req, res, next) {
   const token = req.headers['x-panel-token'];
-  if (token && token === PANEL_TOKEN) return next();
+  if (token && token.length === PANEL_TOKEN.length &&
+      crypto.timingSafeEqual(Buffer.from(token), Buffer.from(PANEL_TOKEN))) {
+    return next();
+  }
   res.status(401).json({ error: 'unauthorized' });
 }
 
@@ -31,7 +42,8 @@ const pm2Router      = require('./routes/pm2');
 const healthRouter   = require('./routes/health');
 const systemRouter   = require('./routes/system');
 const dockerRouter   = require('./routes/docker');
-const backrestRouter = require('./routes/backrest');
+const backrestRouter     = require('./routes/backrest');
+const diagnosticsRouter  = require('./routes/diagnostics');
 
 const app = express();
 
@@ -43,7 +55,7 @@ app.use(cors({
 app.use((req, res, next) => {
   res.setHeader('Content-Security-Policy',
     "default-src 'self'; " +
-    "script-src 'self' 'unsafe-inline'; " +
+    "script-src 'self'; " +
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
     "font-src https://fonts.gstatic.com; " +
     "connect-src 'self'; " +
@@ -61,6 +73,7 @@ app.use('/api/health', tokenAuth, healthRouter);
 app.use('/api/system', tokenAuth, systemRouter);
 app.use('/api/docker',   tokenAuth, dockerRouter);
 app.use('/api/backrest', tokenAuth, backrestRouter);
+app.use('/api/diagnostics', tokenAuth, diagnosticsRouter);
 
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, '../public/index.html'));
