@@ -5,6 +5,7 @@ const net = require('net');
 const dns = require('dns');
 const fs = require('fs');
 const os = require('os');
+const path = require('path');
 const { execFile, execFileSync } = require('child_process');
 const pm2 = require('pm2');
 const config = require('../../config/config');
@@ -383,6 +384,124 @@ async function checkGitDirty(opts) {
   return result('git-dirty', 'Git repo state', 'pass', 'All repos clean', null, Date.now() - start);
 }
 
+// ── Agent behavioral health checks ──
+
+async function checkMemsearchContent(opts) {
+  const start = Date.now();
+  const today = new Date().toISOString().slice(0, 10);
+  const projectsDir = path.join(os.homedir(), '.claude', 'projects');
+  const now = Date.now();
+  const twoHours = 2 * 60 * 60 * 1000;
+  const twoDays = 48 * 60 * 60 * 1000;
+
+  const emptyFiles = [];
+  const staleFiles = [];
+
+  let projectDirs;
+  try {
+    projectDirs = fs.readdirSync(projectsDir)
+      .filter(d => !d.startsWith('-') && !d.startsWith('.'))
+      .map(d => path.join(projectsDir, d));
+  } catch (_) {
+    return result('memsearch-content', 'Memsearch memory content', 'pass', 'Cannot read projects dir — skipping', null, Date.now() - start);
+  }
+
+  for (const dir of projectDirs) {
+    const memFile = path.join(dir, '.memsearch', 'memory', `${today}.md`);
+    try {
+      const stat = fs.statSync(memFile);
+      const age = now - stat.mtimeMs;
+      if (age < twoHours) continue;
+
+      const content = fs.readFileSync(memFile, 'utf8');
+      const hasContent = content.includes('### ');
+
+      if (!hasContent) {
+        const name = path.basename(dir);
+        if (age > twoDays) staleFiles.push(name);
+        else emptyFiles.push(name);
+      }
+    } catch (_) {
+      // File doesn't exist — no sessions in this project today, skip
+    }
+  }
+
+  if (staleFiles.length > 0) {
+    return result('memsearch-content', 'Memsearch memory content', 'fail',
+      `${staleFiles.length} project(s) have memory files with no summaries for 48h+`,
+      `Missing content: ${staleFiles.join(', ')}`, Date.now() - start);
+  }
+  if (emptyFiles.length > 0) {
+    return result('memsearch-content', 'Memsearch memory content', 'warn',
+      `${emptyFiles.length} project(s) have memory files with no summaries today`,
+      `Missing content: ${emptyFiles.join(', ')}`, Date.now() - start);
+  }
+  return result('memsearch-content', 'Memsearch memory content', 'pass',
+    'All active project memory files have content', null, Date.now() - start);
+}
+
+async function checkDocHealthReport(opts) {
+  const start = Date.now();
+  const reportPath = path.join(os.homedir(), '.claude', 'memory', 'shared', 'doc-health-report.md');
+  const warnAge = 14 * 24 * 60 * 60 * 1000;
+  const failAge = 21 * 24 * 60 * 60 * 1000;
+
+  try {
+    const stat = fs.statSync(reportPath);
+    const age = Date.now() - stat.mtimeMs;
+    const days = Math.floor(age / (24 * 60 * 60 * 1000));
+    const lastRun = new Date(stat.mtimeMs).toISOString().slice(0, 10);
+
+    if (age > failAge) {
+      return result('doc-health-report', 'Doc-health report', 'fail',
+        `Report is ${days} days old — agent may not be running`, `Last: ${lastRun}`, Date.now() - start);
+    }
+    if (age > warnAge) {
+      return result('doc-health-report', 'Doc-health report', 'warn',
+        `Report is ${days} days old`, `Last: ${lastRun}`, Date.now() - start);
+    }
+    return result('doc-health-report', 'Doc-health report', 'pass',
+      `Last run ${days === 0 ? 'today' : `${days} day(s) ago`}`, `Last: ${lastRun}`, Date.now() - start);
+  } catch (_) {
+    return result('doc-health-report', 'Doc-health report', 'warn',
+      'Report file not found — doc-health may never have run', null, Date.now() - start);
+  }
+}
+
+async function checkMemorySync(opts) {
+  const start = Date.now();
+  const sharedDir = path.join(os.homedir(), '.claude', 'memory', 'shared');
+  const warnAge = 7 * 24 * 60 * 60 * 1000;
+
+  try {
+    const files = fs.readdirSync(sharedDir).filter(f => f.endsWith('.md'));
+    if (files.length === 0) {
+      return result('memory-sync', 'Memory sync activity', 'warn',
+        'No memory files found in shared/', null, Date.now() - start);
+    }
+
+    const newest = files.reduce((latest, f) => {
+      try {
+        const mtime = fs.statSync(path.join(sharedDir, f)).mtimeMs;
+        return mtime > latest ? mtime : latest;
+      } catch (_) { return latest; }
+    }, 0);
+
+    const age = Date.now() - newest;
+    const days = Math.floor(age / (24 * 60 * 60 * 1000));
+
+    if (age > warnAge) {
+      return result('memory-sync', 'Memory sync activity', 'warn',
+        `No memory writes in ${days} days`, null, Date.now() - start);
+    }
+    return result('memory-sync', 'Memory sync activity', 'pass',
+      `Memory last written ${days === 0 ? 'today' : `${days} day(s) ago`}`, null, Date.now() - start);
+  } catch (_) {
+    return result('memory-sync', 'Memory sync activity', 'warn',
+      'Cannot read memory/shared directory', null, Date.now() - start);
+  }
+}
+
 // ── Check runner ──
 
 const checksByCategory = {
@@ -391,6 +510,7 @@ const checksByCategory = {
   storage:  [checkDiskUsage, checkDockerDisk, checkLogSize],
   security: [checkTLSCert, checkAuthelia],
   config:   [checkExpectedContainers, checkExpectedPM2, checkGitDirty],
+  agents:   [checkMemsearchContent, checkDocHealthReport, checkMemorySync],
 };
 
 async function runChecks(thorough = false) {
