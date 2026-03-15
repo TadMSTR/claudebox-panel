@@ -812,6 +812,17 @@ async function loadUpdates() {
   }
 }
 
+function releaseNotesUrl(dep) {
+  if (!dep.updateAvailable) return null;
+  switch (dep.type) {
+    case 'npm':    return `https://www.npmjs.com/package/${encodeURIComponent(dep.name)}`;
+    case 'pip':    return `https://pypi.org/project/${dep.name}/${dep.latest}/`;
+    case 'docker': return `https://github.com/${dep.name}/releases/tag/v${dep.latest}`;
+    case 'system': return dep.name === 'nodejs' ? `https://nodejs.org/en/blog/release/v${dep.latest}/` : null;
+    default:       return null;
+  }
+}
+
 function statusBadge(dep) {
   if (dep.pinned)          return `<span class="upd-badge pinned">🔒 pinned</span>`;
   if (!dep.updateAvailable) return `<span class="upd-badge ok">up to date</span>`;
@@ -843,8 +854,10 @@ function renderUpdates(data) {
 
   const rows = deps.map(dep => {
     const verClass = dep.breaking ? 'breaking' : '';
+    const rurl = releaseNotesUrl(dep);
+    const rnLink = rurl ? ` <a href="${escHtml(rurl)}" target="_blank" rel="noopener" class="upd-rn-link" title="release notes">↗</a>` : '';
     const verHtml = dep.updateAvailable
-      ? `<span class="cur">${escHtml(dep.current)}</span><span class="arr">→</span><span class="lat">${escHtml(dep.latest)}</span>`
+      ? `<span class="cur">${escHtml(dep.current)}</span><span class="arr">→</span><span class="lat">${escHtml(dep.latest)}</span>${rnLink}`
       : `<span class="cur">${escHtml(dep.current)}</span>`;
     const pinTip = dep.pinnedReason ? ` title="${escHtml(dep.pinnedReason)}"` : '';
     return `<tr>
