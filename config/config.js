@@ -1,6 +1,8 @@
 // claudebox-panel configuration
 // Edit this file to add/remove file browser paths and health check services
 
+const os = require('os');
+const path = require('path');
 const HOME = process.env.HOME || '/home/ted';
 
 module.exports = {
@@ -110,5 +112,29 @@ module.exports = {
 
     // ntfy endpoint for failure alerts
     ntfyUrl: 'https://ntfy.glitch42.com/claudebox',
+  },
+
+  // Dependency updates section
+  depUpdates: {
+    jsonPath: path.join(os.homedir(), '.local/share/logs/dep-updates-latest.json'),
+    auditLogPath: path.join(os.homedir(), '.local/share/logs/update-audit.jsonl'),
+    checkScript: path.join(os.homedir(), 'scripts/check-dep-updates.sh'),
+    cloudcliBaseUrl: 'http://127.0.0.1:3004',
+    depUpdatesProject: path.join(os.homedir(), '.claude/projects/dep-updates'),
+
+    // Only these packages can be updated via one-click safe update
+    safeUpdateCommands: {
+      'memsearch':                  'pip install --upgrade memsearch',
+      'cui-server':                 'npm install -g cui-server',
+      '@tobilu/qmd':                'npm install -g @tobilu/qmd',
+      '@anthropic-ai/claude-code':  'claude update',
+      'pm2':                        'npm install -g pm2 --prefix /usr/local',
+    },
+
+    // Pinned dependencies — never one-click updated
+    pinned: {
+      'authelia/authelia': { version: '4.38', reason: 'Breaking config changes in 4.39+' },
+      'nodejs':            { version: '22.x', reason: 'System Node managed via nvm/apt, not auto-updated' },
+    },
   },
 };

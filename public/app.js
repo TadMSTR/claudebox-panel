@@ -42,6 +42,7 @@ function navigate(panel, el) {
   if (panel === 'files') loadFileRoots();
   if (panel === 'backrest') loadBackrest();
   if (panel === 'diagnostics') loadDiagnostics();
+  if (panel === 'updates') loadUpdates();
 }
 
 // ── Clock ────────────────────────────────────────────────────────────────────
@@ -789,6 +790,197 @@ document.getElementById('file-tree-content').addEventListener('click', e => {
   const fileEntry = e.target.closest('.tree-entry[data-open-file]');
   if (fileEntry) {
     openFile(fileEntry.dataset.openFile, fileEntry);
+    return;
+  }
+});
+
+// ── Updates ───────────────────────────────────────────────────────────────────
+
+let updatesData = null;
+let activeTaskId = null;
+let taskPollInterval = null;
+
+async function loadUpdates() {
+  try {
+    const res = await fetch('/api/updates');
+    const json = await res.json();
+    updatesData = json.data;
+    renderUpdates(updatesData);
+    renderAudit();
+  } catch (e) {
+    document.getElementById('upd-table-wrap').innerHTML = `<div class="error-msg">${e.message}</div>`;
+  }
+}
+
+function statusBadge(dep) {
+  if (dep.pinned)          return `<span class="upd-badge pinned">🔒 pinned</span>`;
+  if (!dep.updateAvailable) return `<span class="upd-badge ok">up to date</span>`;
+  if (dep.breaking)        return `<span class="upd-badge breaking">breaking</span>`;
+  if (dep.majorBump)       return `<span class="upd-badge major">major</span>`;
+  return `<span class="upd-badge safe">update</span>`;
+}
+
+function actionBtn(dep) {
+  if (dep.canSafeUpdate) {
+    return `<button class="btn sm primary" data-upd-apply="${escHtml(dep.name)}">↑ update</button>`;
+  }
+  if (dep.updateAvailable && !dep.pinned) {
+    return `<button class="btn sm warn" data-upd-delegate="${escHtml(dep.name)}" data-upd-from="${escHtml(dep.current)}" data-upd-to="${escHtml(dep.latest)}" data-upd-type="${escHtml(dep.type)}">⇗ delegate</button>`;
+  }
+  return '';
+}
+
+function renderUpdates(data) {
+  const wrap = document.getElementById('upd-table-wrap');
+  if (!data) {
+    wrap.innerHTML = `<div class="loading">No data — click "check now" to run the check script.</div>`;
+    updateUpdatesBadge(null);
+    return;
+  }
+  const deps = data.dependencies || [];
+  const updateCount = deps.filter(d => d.updateAvailable && !d.pinned).length;
+  updateUpdatesBadge(updateCount, deps);
+
+  const rows = deps.map(dep => {
+    const verClass = dep.breaking ? 'breaking' : '';
+    const verHtml = dep.updateAvailable
+      ? `<span class="cur">${escHtml(dep.current)}</span><span class="arr">→</span><span class="lat">${escHtml(dep.latest)}</span>`
+      : `<span class="cur">${escHtml(dep.current)}</span>`;
+    const pinTip = dep.pinnedReason ? ` title="${escHtml(dep.pinnedReason)}"` : '';
+    return `<tr>
+      <td><span class="upd-name">${escHtml(dep.name)}</span></td>
+      <td><span class="upd-type">${escHtml(dep.type)}</span></td>
+      <td><span class="upd-ver ${verClass}">${verHtml}</span></td>
+      <td${pinTip}>${statusBadge(dep)}</td>
+      <td><div class="upd-actions">${actionBtn(dep)}</div></td>
+    </tr>`;
+  }).join('');
+
+  const checkedAt = data.checked ? new Date(data.checked).toLocaleString() : '—';
+  wrap.innerHTML = `
+    <p style="font-family:var(--mono);font-size:10px;color:var(--dim);margin-bottom:10px">Last checked: ${checkedAt}</p>
+    <table class="upd-table">
+      <thead><tr>
+        <th>package</th><th>type</th><th>version</th><th>status</th><th>action</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+}
+
+function updateUpdatesBadge(count, deps) {
+  const badge = document.getElementById('badge-updates');
+  if (count === null) { badge.textContent = '—'; badge.className = 'badge'; return; }
+  badge.textContent = count;
+  const hasBreaking = deps && deps.some(d => d.updateAvailable && d.breaking && !d.pinned);
+  badge.className = 'badge ' + (count === 0 ? 'up' : hasBreaking ? 'warn' : 'up');
+}
+
+async function renderAudit() {
+  const wrap = document.getElementById('upd-audit-wrap');
+  try {
+    const res = await fetch('/api/updates/audit');
+    const json = await res.json();
+    const entries = json.entries || [];
+    if (!entries.length) { wrap.innerHTML = `<div style="font-family:var(--mono);font-size:11px;color:var(--dim)">No audit entries yet.</div>`; return; }
+    wrap.innerHTML = entries.map(e => {
+      const ts = e.ts ? new Date(e.ts).toLocaleString() : '—';
+      const ver = e.from && e.to ? `${escHtml(e.from)} → ${escHtml(e.to)}` : '';
+      return `<div class="audit-row">
+        <span class="audit-ts">${ts}</span>
+        <span class="audit-pkg">${escHtml(e.pkg || '—')}${ver ? ` <span style="color:var(--dim)">${ver}</span>` : ''}</span>
+        <span class="audit-method">${escHtml(e.method || '')}</span>
+        <span class="audit-status ${e.status || ''}">${escHtml(e.status || '—')}</span>
+      </div>`;
+    }).join('');
+  } catch (_) {
+    wrap.innerHTML = `<div style="font-family:var(--mono);font-size:11px;color:var(--dim)">Could not load audit log.</div>`;
+  }
+}
+
+function startTaskPoll(taskId) {
+  clearInterval(taskPollInterval);
+  activeTaskId = taskId;
+  const output = document.getElementById('upd-task-output');
+  output.style.display = 'block';
+  output.textContent = 'running…';
+
+  taskPollInterval = setInterval(async () => {
+    try {
+      const res = await fetch(`/api/updates/task/${taskId}`);
+      const task = await res.json();
+      output.textContent = task.output || task.error || 'running…';
+      if (task.status === 'success') {
+        clearInterval(taskPollInterval);
+        output.textContent = (task.output || '') + '\n✓ done';
+        toast('Update completed', 'success');
+        loadUpdates();
+      } else if (task.status === 'failed') {
+        clearInterval(taskPollInterval);
+        output.textContent = (task.error || task.output || '') + '\n✗ failed';
+        toast('Update failed', 'error');
+      }
+    } catch (_) {}
+  }, 1500);
+}
+
+// Updates panel event delegation
+document.addEventListener('click', async e => {
+  // Check Now
+  if (e.target.id === 'btn-check-now') {
+    e.target.disabled = true;
+    e.target.textContent = '⟳ checking…';
+    try {
+      const res = await fetch('/api/updates/check', { method: 'POST' });
+      const json = await res.json();
+      if (json.ok) { updatesData = json.data; renderUpdates(json.data); renderAudit(); toast('Check complete', 'success'); }
+      else toast('Check failed: ' + (json.error || '?'), 'error');
+    } catch (err) { toast('Check failed: ' + err.message, 'error'); }
+    e.target.disabled = false;
+    e.target.textContent = '⟳ check now';
+    return;
+  }
+
+  // Refresh (cached)
+  if (e.target.id === 'btn-refresh-updates') { loadUpdates(); return; }
+
+  // Apply safe update
+  const applyBtn = e.target.closest('[data-upd-apply]');
+  if (applyBtn) {
+    const name = applyBtn.dataset.updApply;
+    applyBtn.disabled = true;
+    applyBtn.textContent = '↑ updating…';
+    try {
+      const res = await fetch('/api/updates/apply', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name }),
+      });
+      const json = await res.json();
+      if (json.taskId) { startTaskPoll(json.taskId); }
+      else toast(json.error || 'Failed to start update', 'error');
+    } catch (err) { toast('Error: ' + err.message, 'error'); }
+    applyBtn.disabled = false;
+    applyBtn.textContent = '↑ update';
+    return;
+  }
+
+  // Delegate to agent
+  const delegateBtn = e.target.closest('[data-upd-delegate]');
+  if (delegateBtn) {
+    const { updDelegate: name, updFrom: from, updTo: to, updType: type } = delegateBtn.dataset;
+    try {
+      const res = await fetch('/api/updates/delegate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, from, to, type }),
+      });
+      const json = await res.json();
+      if (json.ok) {
+        toast('Delegated to CloudCLI agent', 'success');
+        window.open('https://cloudcli.claudebox.me', '_blank');
+        renderAudit();
+      } else toast(json.error || 'Delegate failed', 'error');
+    } catch (err) { toast('Error: ' + err.message, 'error'); }
     return;
   }
 });

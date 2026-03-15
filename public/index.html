@@ -165,6 +165,38 @@
     /* ── PM2 sections ── */
     .pm2-section { margin-bottom: 24px; }
     .pm2-section-label { font-family: var(--mono); font-size: 9px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: var(--dim); padding-bottom: 8px; border-bottom: 1px solid var(--border); margin-bottom: 2px; }
+    /* ── Updates panel ── */
+    #panel-updates .content { padding: 20px; flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 20px; }
+    .upd-table { width: 100%; border-collapse: collapse; }
+    .upd-table th { font-family: var(--mono); font-size: 9px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: var(--dim); padding: 0 12px 8px; text-align: left; border-bottom: 1px solid var(--border); }
+    .upd-table td { padding: 9px 12px; font-size: 12px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+    .upd-table tr:last-child td { border-bottom: none; }
+    .upd-table tr:hover td { background: rgba(255,255,255,0.015); }
+    .upd-name { font-family: var(--mono); font-size: 11px; }
+    .upd-type { font-family: var(--mono); font-size: 9px; color: var(--dim); padding: 1px 5px; border: 1px solid var(--border2); border-radius: 3px; }
+    .upd-ver { font-family: var(--mono); font-size: 11px; }
+    .upd-ver .cur { color: var(--dim); }
+    .upd-ver .arr { color: var(--border2); margin: 0 4px; }
+    .upd-ver .lat { color: var(--accent); }
+    .upd-ver.breaking .lat { color: var(--danger); }
+    .upd-badge { font-family: var(--mono); font-size: 9px; padding: 2px 6px; border-radius: 3px; white-space: nowrap; }
+    .upd-badge.ok      { background: rgba(74,240,176,0.1);  color: var(--accent); }
+    .upd-badge.safe    { background: rgba(74,240,176,0.1);  color: var(--accent); }
+    .upd-badge.major   { background: rgba(240,194,74,0.12); color: var(--warn); }
+    .upd-badge.breaking{ background: rgba(240,85,85,0.1);   color: var(--danger); }
+    .upd-badge.pinned  { background: rgba(90,98,114,0.2);   color: var(--dim); }
+    .upd-actions { display: flex; gap: 4px; }
+    .upd-section-label { font-family: var(--mono); font-size: 9px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: var(--dim); padding-bottom: 8px; border-bottom: 1px solid var(--border); margin-bottom: 2px; }
+    #upd-task-output { background: var(--surface); border: 1px solid var(--border); border-radius: 3px; padding: 10px 14px; font-family: var(--mono); font-size: 10px; line-height: 1.6; white-space: pre-wrap; word-break: break-all; max-height: 180px; overflow-y: auto; margin-top: 8px; color: var(--text); display: none; }
+    .audit-row { display: grid; grid-template-columns: 140px 1fr 60px 80px; gap: 8px; align-items: baseline; padding: 6px 0; border-bottom: 1px solid var(--border); font-size: 11px; }
+    .audit-row:last-child { border-bottom: none; }
+    .audit-ts { font-family: var(--mono); font-size: 10px; color: var(--dim); }
+    .audit-pkg { font-family: var(--mono); font-size: 11px; }
+    .audit-method { font-family: var(--mono); font-size: 9px; color: var(--dim); }
+    .audit-status { font-family: var(--mono); font-size: 9px; }
+    .audit-status.success  { color: var(--accent); }
+    .audit-status.failed   { color: var(--danger); }
+    .audit-status.delegated{ color: var(--warn); }
   </style>
 </head>
 <body>
@@ -219,6 +251,9 @@
       </div>
       <div class="nav-item" data-panel="diagnostics">
         <span class="icon">⬢</span> Diagnostics <span class="badge" id="badge-diag">--</span>
+      </div>
+      <div class="nav-item" data-panel="updates">
+        <span class="icon">↑</span> Updates <span class="badge" id="badge-updates">—</span>
       </div>
     </div>
     <div class="nav-section">
@@ -305,6 +340,26 @@
         </div>
       </div>
       <div class="content" id="diagnostics-content"><div class="loading">no results yet — run a check</div></div>
+    </div>
+    <div id="panel-updates" class="panel">
+      <div class="panel-header">
+        <span class="panel-title">updates</span><span class="panel-subtitle">dependency versions</span>
+        <div class="panel-actions">
+          <button class="btn sm" id="btn-refresh-updates">↺ refresh</button>
+          <button class="btn sm primary" id="btn-check-now">⟳ check now</button>
+        </div>
+      </div>
+      <div class="content" id="updates-content">
+        <div>
+          <div class="upd-section-label" style="margin-bottom:10px">Dependencies</div>
+          <div id="upd-table-wrap"><div class="loading">loading…</div></div>
+          <div id="upd-task-output"></div>
+        </div>
+        <div>
+          <div class="upd-section-label" style="margin-bottom:10px">Audit Log</div>
+          <div id="upd-audit-wrap"><div class="loading">loading…</div></div>
+        </div>
+      </div>
     </div>
     <div id="panel-files" class="panel">
       <div id="file-tree">
