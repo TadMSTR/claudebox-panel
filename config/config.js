@@ -122,11 +122,12 @@ module.exports = {
     cloudcliBaseUrl: 'http://127.0.0.1:3004',
     depUpdatesProject: path.join(os.homedir(), '.claude/projects/dep-updates'),
 
-    // Only these packages can be updated via one-click safe update
+    // Only these packages can be updated via one-click safe update.
+    // Do NOT add @tobilu/qmd here — it requires a post-install mcp.js patch and PM2
+    // restart that one-click can't handle. It delegates to the CloudCLI agent instead.
     safeUpdateCommands: {
       'memsearch':                  'pip install --upgrade memsearch',
       'cui-server':                 'npm install -g cui-server',
-      '@tobilu/qmd':                'npm install -g @tobilu/qmd',
       '@anthropic-ai/claude-code':  'claude update',
       'pm2':                        'npm install -g pm2 --prefix /usr/local',
     },
