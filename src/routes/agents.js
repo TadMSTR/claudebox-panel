@@ -133,7 +133,16 @@ router.get('/sessions', (req, res) => {
             if (obj.type === 'user' || obj.type === 'assistant') messageCount++;
             if (!previewFound && obj.type === 'user' && Array.isArray(obj.message?.content)) {
               const text = obj.message.content.find(c => c.type === 'text')?.text || '';
-              if (text) { preview = text.slice(0, 80); previewFound = true; }
+              if (text) {
+                if (text.length > 80) {
+                  const cut = text.slice(0, 80);
+                  const lastSpace = cut.lastIndexOf(' ');
+                  preview = (lastSpace > 20 ? cut.slice(0, lastSpace) : cut) + '\u2026';
+                } else {
+                  preview = text;
+                }
+                previewFound = true;
+              }
             }
           } catch (_) {}
         }
@@ -226,6 +235,7 @@ router.get('/files/browse', (req, res) => {
     const stat = fs.statSync(resolved);
     if (!stat.isDirectory()) return res.status(400).json({ error: 'not a directory' });
     const entries = fs.readdirSync(resolved, { withFileTypes: true })
+      .filter(e => !e.name.startsWith('.') || e.name === '.gitignore')
       .map(e => {
         const fullPath = path.join(resolved, e.name);
         const isDir = e.isDirectory();
