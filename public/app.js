@@ -889,7 +889,7 @@ async function renderAudit() {
         <span class="audit-ts">${ts}</span>
         <span class="audit-pkg">${escHtml(e.pkg || '—')}${ver ? ` <span style="color:var(--dim)">${ver}</span>` : ''}</span>
         <span class="audit-method">${escHtml(e.method || '')}</span>
-        <span class="audit-status ${e.status || ''}">${escHtml(e.status || '—')}</span>
+        <span class="audit-status ${escHtml(e.status || '')}">${escHtml(e.status || '—')}</span>
       </div>`;
     }).join('');
   } catch (_) {

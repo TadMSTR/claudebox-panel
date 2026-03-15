@@ -12,6 +12,10 @@ const cfg = config.depUpdates;
 const tasks = new Map();
 let taskCounter = 0;
 
+// In-process mutex — prevents concurrent apply runs within the same panel process
+// (panel-vs-cron conflicts are handled by the shell script's own flock)
+let updateInProgress = false;
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function readSidecar() {
@@ -83,23 +87,17 @@ router.post('/apply', (req, res) => {
 
   if (cfg.pinned[name]) return res.status(403).json({ error: 'Package is pinned' });
 
-  // Check file lock
-  try {
-    fs.accessSync('/tmp/dep-update.lock', fs.constants.F_OK);
-    // Lock file exists — check if it's actually locked by a process
-    const result = require('child_process').spawnSync('flock', ['-n', '/tmp/dep-update.lock', 'true']);
-    if (result.status !== 0) {
-      return res.status(409).json({ error: 'Update already in progress' });
-    }
-  } catch (_) {
-    // Lock file doesn't exist — fine
-  }
+  // In-process mutex — prevents concurrent applies from the same panel process
+  if (updateInProgress) return res.status(409).json({ error: 'Update already in progress' });
+  updateInProgress = true;
 
   const taskId = `task-${++taskCounter}`;
   tasks.set(taskId, { status: 'running', output: '', error: null, startedAt: Date.now() });
 
+  // Note: commands in safeUpdateCommands must not use quoted/space-containing arguments
   const parts = cmd.split(/\s+/);
   const proc = execFile(parts[0], parts.slice(1), { timeout: 120000 }, (err, stdout, stderr) => {
+    updateInProgress = false;
     const task = tasks.get(taskId);
     if (!task) return;
     const duration = Date.now() - task.startedAt;
@@ -113,6 +111,7 @@ router.post('/apply', (req, res) => {
   });
 
   proc.on('error', err => {
+    updateInProgress = false;
     const task = tasks.get(taskId);
     if (task) tasks.set(taskId, { ...task, status: 'failed', error: err.message, duration: Date.now() - task.startedAt });
   });
@@ -133,6 +132,11 @@ router.get('/task/:id', (req, res) => {
 router.post('/delegate', (req, res) => {
   const { name, type, from, to } = req.body || {};
   if (!name) return res.status(400).json({ error: 'name required' });
+
+  // Validate name against known tracked dependencies
+  const sidecar = readSidecar();
+  const knownNames = sidecar ? sidecar.dependencies.map(d => d.name) : [];
+  if (!knownNames.includes(name)) return res.status(400).json({ error: 'Unknown package' });
 
   const message = `Update ${name} (${type || 'unknown'}) from ${from || '?'} to ${to || 'latest'}.\n\nThis is a breaking change (major version bump). Check the changelog, apply the update, verify the service, and write an audit entry.`;
 
