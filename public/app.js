@@ -43,6 +43,7 @@ function navigate(panel, el) {
   if (panel === 'backrest') loadBackrest();
   if (panel === 'diagnostics') loadDiagnostics();
   if (panel === 'updates') loadUpdates();
+  if (panel === 'agents') loadAgents();
 }
 
 // ── Clock ────────────────────────────────────────────────────────────────────
@@ -790,6 +791,211 @@ document.getElementById('file-tree-content').addEventListener('click', e => {
   const fileEntry = e.target.closest('.tree-entry[data-open-file]');
   if (fileEntry) {
     openFile(fileEntry.dataset.openFile, fileEntry);
+    return;
+  }
+});
+
+// ── Agents ────────────────────────────────────────────────────────────────────
+
+let agentSelectedEncoded = null;
+
+async function loadAgents() {
+  const sel = document.getElementById('agent-project-sel');
+  sel.innerHTML = '<option value="">loading…</option>';
+  try {
+    const projects = await (await fetch('/api/agents/projects')).json();
+    if (projects.error) throw new Error(projects.error);
+    sel.innerHTML = '<option value="">— select agent —</option>' +
+      projects.map(p =>
+        `<option value="${escHtml(p.encoded)}">${escHtml(p.displayName)} (${p.sessionCount})</option>`
+      ).join('');
+    loadAgentFileProjects();
+  } catch (e) {
+    sel.innerHTML = `<option value="">error: ${escHtml(e.message)}</option>`;
+  }
+}
+
+async function selectAgentForChat(encoded) {
+  agentSelectedEncoded = encoded;
+  const sessionList = document.getElementById('agent-session-list');
+  const messages = document.getElementById('agent-messages');
+  messages.innerHTML = '<div class="loading" style="align-self:center;margin-top:24px">select a session</div>';
+  if (!encoded) {
+    sessionList.innerHTML = '<div class="loading" style="padding:10px 14px">select an agent</div>';
+    return;
+  }
+  sessionList.innerHTML = '<div class="loading" style="padding:10px 14px">loading…</div>';
+  try {
+    const sessions = await (await fetch('/api/agents/sessions?encoded=' + encodeURIComponent(encoded))).json();
+    if (sessions.error) throw new Error(sessions.error);
+    if (!sessions.length) {
+      sessionList.innerHTML = '<div class="loading" style="padding:10px 14px">no sessions found</div>';
+      return;
+    }
+    sessionList.innerHTML = sessions.map(s => {
+      const ts = s.created ? new Date(s.created).toLocaleString() : '—';
+      return `<div class="agent-session-item" data-session-id="${escHtml(s.sessionId)}">
+        <span class="agent-session-ts">${ts} · ${s.messageCount} msgs</span>
+        <span class="agent-session-preview">${escHtml(s.preview || '(no preview)')}</span>
+      </div>`;
+    }).join('');
+  } catch (e) {
+    sessionList.innerHTML = `<div class="error-msg" style="margin:8px">${escHtml(e.message)}</div>`;
+  }
+}
+
+async function loadAgentSession(sessionId) {
+  document.querySelectorAll('.agent-session-item').forEach(el =>
+    el.classList.toggle('active', el.dataset.sessionId === sessionId)
+  );
+  const msgEl = document.getElementById('agent-messages');
+  msgEl.innerHTML = '<div class="loading" style="align-self:center">loading…</div>';
+  try {
+    const data = await (await fetch(
+      `/api/agents/messages?encoded=${encodeURIComponent(agentSelectedEncoded)}&session=${encodeURIComponent(sessionId)}`
+    )).json();
+    if (data.error) throw new Error(data.error);
+    renderAgentMessages(data.messages);
+  } catch (e) {
+    msgEl.innerHTML = `<div class="error-msg" style="margin:8px">${escHtml(e.message)}</div>`;
+  }
+}
+
+function renderAgentMessages(messages) {
+  const msgEl = document.getElementById('agent-messages');
+  if (!messages.length) {
+    msgEl.innerHTML = '<div class="loading" style="align-self:center">no messages</div>';
+    return;
+  }
+  msgEl.innerHTML = messages.map(msg => {
+    const ts = msg.timestamp ? new Date(msg.timestamp).toLocaleTimeString() : '';
+    const toolHtml = (msg.tools && msg.tools.length)
+      ? `<div class="agent-msg-tools">${msg.tools.map(t => `<span class="agent-tool-pill">${escHtml(t)}</span>`).join('')}</div>`
+      : '';
+    const trHtml = msg.toolResultCount
+      ? `<div class="agent-msg-tools"><span class="agent-tool-pill result">${msg.toolResultCount} tool result${msg.toolResultCount > 1 ? 's' : ''}</span></div>`
+      : '';
+    return `<div class="agent-msg ${escHtml(msg.role)}">
+      <span class="agent-msg-role">${msg.role}</span>
+      ${msg.text ? `<div class="agent-msg-text">${escHtml(msg.text)}</div>` : ''}
+      ${toolHtml}${trHtml}
+      <span class="agent-msg-ts">${ts}</span>
+    </div>`;
+  }).join('');
+  msgEl.scrollTop = msgEl.scrollHeight;
+}
+
+// Agent file browser
+
+async function loadAgentFileProjects() {
+  const sel = document.getElementById('agent-file-proj-sel');
+  try {
+    const projects = await (await fetch('/api/agents/file-projects')).json();
+    if (projects.error) throw new Error(projects.error);
+    sel.innerHTML = '<option value="">— select project —</option>' +
+      projects.map(p => `<option value="${escHtml(p.path)}">${escHtml(p.name)}</option>`).join('');
+  } catch (_) {
+    sel.innerHTML = '<option value="">error loading projects</option>';
+  }
+}
+
+async function browseAgentDir(dirPath, container, depth) {
+  const indent = 14 + depth * 14;
+  container.innerHTML = `<div class="loading" style="padding-left:${indent}px">loading…</div>`;
+  try {
+    const data = await (await fetch('/api/agents/files/browse?path=' + encodeURIComponent(dirPath))).json();
+    if (data.error) throw new Error(data.error);
+    if (!data.entries.length) {
+      container.innerHTML = `<div style="padding-left:${indent}px;font-family:var(--mono);font-size:10px;color:var(--dim);padding-top:4px">empty</div>`;
+      return;
+    }
+    container.innerHTML = data.entries.map(e => {
+      const icon = e.type === 'dir' ? '\u25B8' : fileIcon(e.ext);
+      const child = e.type === 'dir' ? '<div class="tree-children" style="display:none"></div>' : '';
+      const dataAttrs = e.type === 'dir'
+        ? ` data-agent-dir="${escHtml(e.path)}" data-agent-depth="${depth}"`
+        : ` data-agent-file="${escHtml(e.path)}"`;
+      return `<div class="tree-entry" style="padding-left:${indent}px"${dataAttrs}>`
+        + `<span class="icon">${icon}</span>`
+        + `<span style="overflow:hidden;text-overflow:ellipsis">${escHtml(e.name)}</span>`
+        + `</div>${child}`;
+    }).join('');
+  } catch (err) {
+    container.innerHTML = `<div style="padding-left:${indent}px;color:var(--danger);font-size:10px;padding-top:4px">${escHtml(err.message)}</div>`;
+  }
+}
+
+function toggleAgentSubdir(el, dirPath, depth) {
+  const sibling = el.nextElementSibling;
+  const isOpen = el.dataset.open === '1';
+  if (isOpen) {
+    el.dataset.open = '0';
+    el.querySelector('.icon').textContent = '\u25B8';
+    if (sibling) sibling.style.display = 'none';
+    return;
+  }
+  el.dataset.open = '1';
+  el.querySelector('.icon').textContent = '\u25BE';
+  if (sibling) {
+    sibling.style.display = 'block';
+    if (!sibling.dataset.loaded) { sibling.dataset.loaded = '1'; browseAgentDir(dirPath, sibling, depth + 1); }
+  }
+}
+
+async function openAgentFile(filePath, el) {
+  document.querySelectorAll('#agent-file-tree-content .tree-entry.selected').forEach(e => e.classList.remove('selected'));
+  if (el) el.classList.add('selected');
+  const pathEl   = document.getElementById('agent-file-path');
+  const textarea = document.getElementById('agent-file-textarea');
+  const statusEl = document.getElementById('agent-file-status');
+  pathEl.textContent = filePath;
+  textarea.value = 'loading\u2026';
+  statusEl.textContent = '\u2014';
+  try {
+    const data = await (await fetch('/api/agents/files/read?path=' + encodeURIComponent(filePath))).json();
+    if (data.error) throw new Error(data.error);
+    textarea.value = data.content;
+    statusEl.textContent = `${data.content.split('\n').length} lines \u00B7 ${fmtBytes(data.size)} \u00B7 ${data.ext || 'text'} \u00B7 read-only`;
+  } catch (e) {
+    textarea.value = 'Error: ' + e.message;
+    statusEl.textContent = 'error';
+  }
+}
+
+// Agent event listeners
+document.getElementById('btn-refresh-agents').addEventListener('click', () => loadAgents());
+
+document.getElementById('agent-project-sel').addEventListener('change', e => {
+  selectAgentForChat(e.target.value);
+});
+
+document.getElementById('agent-session-list').addEventListener('click', e => {
+  const item = e.target.closest('.agent-session-item[data-session-id]');
+  if (item && agentSelectedEncoded) loadAgentSession(item.dataset.sessionId);
+});
+
+document.getElementById('agent-file-proj-sel').addEventListener('change', async e => {
+  const projPath = e.target.value;
+  const treeContent = document.getElementById('agent-file-tree-content');
+  document.getElementById('agent-file-path').textContent = 'select a file to view';
+  document.getElementById('agent-file-textarea').value = '';
+  document.getElementById('agent-file-status').textContent = '\u2014';
+  if (!projPath) {
+    treeContent.innerHTML = '<div class="loading" style="padding:10px 14px">select a project</div>';
+    return;
+  }
+  await browseAgentDir(projPath, treeContent, 0);
+});
+
+document.getElementById('agent-file-tree-content').addEventListener('click', e => {
+  const dirEntry = e.target.closest('.tree-entry[data-agent-dir]');
+  if (dirEntry) {
+    toggleAgentSubdir(dirEntry, dirEntry.dataset.agentDir, parseInt(dirEntry.dataset.agentDepth));
+    return;
+  }
+  const fileEntry = e.target.closest('.tree-entry[data-agent-file]');
+  if (fileEntry) {
+    openAgentFile(fileEntry.dataset.agentFile, fileEntry);
     return;
   }
 });

@@ -45,6 +45,7 @@ const dockerRouter   = require('./routes/docker');
 const backrestRouter     = require('./routes/backrest');
 const diagnosticsRouter  = require('./routes/diagnostics');
 const updatesRouter      = require('./routes/updates');
+const agentsRouter       = require('./routes/agents');
 
 const app = express();
 
@@ -76,6 +77,7 @@ app.use('/api/docker',   tokenAuth, dockerRouter);
 app.use('/api/backrest', tokenAuth, backrestRouter);
 app.use('/api/diagnostics', tokenAuth, diagnosticsRouter);
 app.use('/api/updates',    tokenAuth, updatesRouter);
+app.use('/api/agents',     tokenAuth, agentsRouter);
 
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, '../public/index.html'));

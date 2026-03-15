@@ -8,6 +8,10 @@ const HOME = process.env.HOME || '/home/ted';
 module.exports = {
   port: 3003,
 
+  // Base directory for agent project and session files
+  agentsDir: `${HOME}/.claude/projects`,
+
+
   // CORS allowed origins
   allowedOrigins: ['https://panel.claudebox.me'],
 
