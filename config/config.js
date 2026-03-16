@@ -114,8 +114,8 @@ module.exports = {
     // DNS domains to resolve
     dnsChecks: ['claudebox.me', 'glitch42.com', 'google.com'],
 
-    // ntfy endpoint for failure alerts
-    ntfyUrl: 'https://ntfy.glitch42.com/claudebox',
+    // ntfy endpoint for failure alerts — set NTFY_URL in .env
+    ntfyUrl: process.env.NTFY_URL || null,
   },
 
   // Dependency updates section
