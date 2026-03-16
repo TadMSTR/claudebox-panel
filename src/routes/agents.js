@@ -16,13 +16,16 @@ function isValidDirName(name) {
   return true;
 }
 
-// Resolve a path and confirm it stays within AGENTS_DIR
+// Resolve a path and confirm it stays within AGENTS_DIR.
+// Files may be symlinks pointing outside the dir (e.g. CLAUDE.md → prime-directive);
+// we validate the parent directory rather than the resolved target so those are readable.
 function resolveAgentPath(requestedPath) {
   try {
-    const resolved = fs.realpathSync(requestedPath);
     const base = fs.realpathSync(AGENTS_DIR);
-    if (resolved === base || resolved.startsWith(base + path.sep)) return resolved;
-    return null;
+    const parent = fs.realpathSync(path.dirname(requestedPath));
+    if (parent !== base && !parent.startsWith(base + path.sep)) return null;
+    // Parent is inside AGENTS_DIR — return the joined path (symlink may point elsewhere)
+    return path.join(parent, path.basename(requestedPath));
   } catch (_) { return null; }
 }
 
