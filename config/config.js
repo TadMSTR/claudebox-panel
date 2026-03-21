@@ -131,10 +131,11 @@ module.exports = {
     // restart that one-click can't handle. It delegates to the CloudCLI agent instead.
     // Do NOT add cui-server here — installed root-owned via sudo npm install -g, panel
     // cannot update without sudo. Update manually: sudo npm install -g cui-server && pm2 restart cloudcli
+    // Do NOT add pm2 here — installed root-owned in /usr/local, panel cannot update without sudo.
+    // Update manually: sudo npm install -g pm2 --prefix /usr/local && pm2 update
     safeUpdateCommands: {
       'memsearch':                  'pip install memsearch[local] --upgrade --break-system-packages',
       '@anthropic-ai/claude-code':  'claude update',
-      'pm2':                        'npm install -g pm2 --prefix /usr/local',
     },
 
     // Pinned dependencies — never one-click updated
