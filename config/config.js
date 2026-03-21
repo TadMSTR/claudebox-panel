@@ -130,7 +130,7 @@ module.exports = {
     // Do NOT add @tobilu/qmd here — it requires a post-install mcp.js patch and PM2
     // restart that one-click can't handle. It delegates to the CloudCLI agent instead.
     safeUpdateCommands: {
-      'memsearch':                  'pip install --upgrade memsearch',
+      'memsearch':                  'pip install "memsearch[local]" --upgrade --break-system-packages',
       'cui-server':                 'npm install -g cui-server',
       '@anthropic-ai/claude-code':  'claude update',
       'pm2':                        'npm install -g pm2 --prefix /usr/local',
