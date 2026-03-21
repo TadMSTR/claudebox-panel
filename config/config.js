@@ -129,9 +129,10 @@ module.exports = {
     // Only these packages can be updated via one-click safe update.
     // Do NOT add @tobilu/qmd here — it requires a post-install mcp.js patch and PM2
     // restart that one-click can't handle. It delegates to the CloudCLI agent instead.
+    // Do NOT add cui-server here — installed root-owned via sudo npm install -g, panel
+    // cannot update without sudo. Update manually: sudo npm install -g cui-server && pm2 restart cloudcli
     safeUpdateCommands: {
-      'memsearch':                  'pip install "memsearch[local]" --upgrade --break-system-packages',
-      'cui-server':                 'npm install -g cui-server',
+      'memsearch':                  'pip install memsearch[local] --upgrade --break-system-packages',
       '@anthropic-ai/claude-code':  'claude update',
       'pm2':                        'npm install -g pm2 --prefix /usr/local',
     },
