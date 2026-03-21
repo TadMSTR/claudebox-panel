@@ -129,8 +129,9 @@ module.exports = {
     // Only these packages can be updated via one-click safe update.
     // Do NOT add @tobilu/qmd here — it requires a post-install mcp.js patch and PM2
     // restart that one-click can't handle. It delegates to the CloudCLI agent instead.
-    // Do NOT add cui-server here — installed root-owned via sudo npm install -g, panel
-    // cannot update without sudo. Update manually: sudo npm install -g cui-server && pm2 restart cloudcli
+    // Do NOT add @siteboon/claude-code-ui (CloudCLI) here — installed root-owned via
+    // sudo npm install -g, panel cannot update without sudo.
+    // Update manually: sudo npm install -g @siteboon/claude-code-ui@latest && pm2 restart cloudcli
     // Do NOT add pm2 here — installed root-owned in /usr/local, panel cannot update without sudo.
     // Update manually: sudo npm install -g pm2 --prefix /usr/local && pm2 update
     safeUpdateCommands: {
