@@ -42,7 +42,6 @@ module.exports = {
     { label: 'Grafana',             url: 'http://10.10.1.9:3000',  link: 'https://grafana.claudebox.me' },
     { label: 'Netdata (claudebox)', url: 'http://127.0.0.1:19999', link: 'https://netdata.claudebox.me' },
     { label: 'Netdata (atlas)',     url: 'http://10.10.1.9:19998', link: null },
-    { label: 'cui',                 url: 'http://127.0.0.1:3001',  link: 'https://cui.claudebox.me' },
     { label: 'CloudCLI',            url: 'http://127.0.0.1:3004',  link: 'https://cloudcli.claudebox.me' },
     { label: 'qmd',                 url: 'http://127.0.0.1:8181',  link: null },
     { label: 'NFS mount',           url: null, mountpoint: '/mnt/atlas/claudebox', link: null },
@@ -64,7 +63,7 @@ module.exports = {
     ],
 
     // Expected always-on PM2 processes
-    expectedPM2: ['qmd', 'cui', 'cloudcli', 'homelab-ops-mcp', 'agent-panel'],
+    expectedPM2: ['qmd', 'cloudcli', 'homelab-ops-mcp', 'agent-panel'],
 
     // NFS mounts to verify
     nfsMounts: [
@@ -76,7 +75,6 @@ module.exports = {
     // Ports that should be listening
     expectedPorts: [
       { port: 443,   label: 'swag' },
-      { port: 3001,  label: 'cui' },
       { port: 3003,  label: 'agent-panel' },
       { port: 3004,  label: 'cloudcli' },
       { port: 8181,  label: 'qmd' },
