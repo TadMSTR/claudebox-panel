@@ -28,7 +28,7 @@ docker restart swag
 
 ## Access
 
-`https://panel.claudebox.me` — Authelia SSO required. Port: `3003`.
+`https://panel.yourdomain` — Authelia SSO required. Port: `3003`.
 
 ## Configuration
 

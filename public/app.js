@@ -7,6 +7,7 @@ let editingEnabled  = false;  // user has unlocked editing (read-only toggle)
 let hasBackup       = false;  // .panelbak exists on disk for currentFile
 let pm2Processes    = [];
 let hideSampleFiles = true;
+let lastServices    = [];   // populated by renderHealth; used to look up service links
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 function escHtml(s) {
@@ -62,6 +63,7 @@ async function loadHealth(force = false) {
 
 function renderHealth(data) {
   const services = data.services || [];
+  lastServices = services;
   const upCount = services.filter(s => s.status === 'up').length;
   const downCount = services.filter(s => s.status === 'down').length;
   const badge = document.getElementById('badge-health');
@@ -1196,7 +1198,8 @@ document.addEventListener('click', async e => {
       const json = await res.json();
       if (json.ok) {
         toast('Delegated to CloudCLI agent', 'success');
-        window.open('https://cloudcli.claudebox.me', '_blank');
+        const cloudcliSvc = lastServices.find(s => s.label === 'CloudCLI');
+        if (cloudcliSvc?.link) window.open(cloudcliSvc.link, '_blank');
         renderAudit();
       } else toast(json.error || 'Delegate failed', 'error');
     } catch (err) { toast('Error: ' + err.message, 'error'); }
