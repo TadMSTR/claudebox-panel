@@ -4,9 +4,8 @@ const crypto = require('crypto');
 const rateLimit = require('express-rate-limit');
 const path = require('path');
 const fs = require('fs');
-const config = require('../config/config');
 
-// Load .env manually — no dotenv dependency needed
+// Load .env before config so env vars are available during config evaluation
 const envPath = path.join(__dirname, '../.env');
 if (fs.existsSync(envPath)) {
   fs.readFileSync(envPath, 'utf-8').split('\n').forEach(line => {
@@ -21,6 +20,8 @@ if (fs.existsSync(envPath)) {
     if (key) process.env[key] = val;
   });
 }
+
+const config = require('../config/config');
 
 const PANEL_TOKEN = process.env.PANEL_TOKEN;
 if (!PANEL_TOKEN) {

@@ -3,7 +3,20 @@
 
 const os = require('os');
 const path = require('path');
-const HOME = process.env.HOME || '/home/ted';
+const HOME = process.env.HOME || os.homedir();
+
+const PANEL_ALLOWED_ORIGIN = process.env.PANEL_ALLOWED_ORIGIN || 'https://panel.yourdomain';
+const CHAT_URL             = process.env.CHAT_URL             || 'https://chat.yourdomain';
+const AUTH_LINK            = process.env.AUTH_LINK            || 'https://auth.yourdomain';
+const GRAFANA_URL          = process.env.GRAFANA_URL          || 'http://10.10.x.x:3000';
+const GRAFANA_LINK         = process.env.GRAFANA_LINK         || 'https://grafana.yourdomain';
+const NETDATA_LINK         = process.env.NETDATA_LINK         || 'https://netdata.yourdomain';
+const ATLAS_NETDATA_URL    = process.env.ATLAS_NETDATA_URL    || 'http://10.10.x.x:19998';
+const CLOUDCLI_LINK        = process.env.CLOUDCLI_LINK        || 'https://cloudcli.yourdomain';
+const ATLAS_IP             = process.env.ATLAS_IP             || '10.10.x.x';
+const UNRAID_IP            = process.env.UNRAID_IP            || '10.10.x.x';
+const TLS_CERT_PATH        = process.env.TLS_CERT_PATH        || '/opt/appdata/swag/etc/letsencrypt/live/yourdomain/fullchain.pem';
+const DNS_CHECK_DOMAINS    = (process.env.DNS_CHECK_DOMAINS   || 'yourdomain,google.com').split(',').map(d => d.trim());
 
 module.exports = {
   port: 3003,
@@ -13,7 +26,7 @@ module.exports = {
 
 
   // CORS allowed origins
-  allowedOrigins: ['https://panel.claudebox.me'],
+  allowedOrigins: [PANEL_ALLOWED_ORIGIN],
 
   // File browser: whitelisted directories and individual files
   filePaths: [
@@ -37,12 +50,12 @@ module.exports = {
 
   // Health check services
   services: [
-    { label: 'LibreChat',           url: 'https://chat.claudebox.me',  link: 'https://chat.claudebox.me' },
-    { label: 'Authelia',            url: 'http://127.0.0.1:9091',  link: 'https://auth.claudebox.me' },
-    { label: 'Grafana',             url: 'http://10.10.1.9:3000',  link: 'https://grafana.claudebox.me' },
-    { label: 'Netdata (claudebox)', url: 'http://127.0.0.1:19999', link: 'https://netdata.claudebox.me' },
-    { label: 'Netdata (atlas)',     url: 'http://10.10.1.9:19998', link: null },
-    { label: 'CloudCLI',            url: 'http://127.0.0.1:3004',  link: 'https://cloudcli.claudebox.me' },
+    { label: 'LibreChat',           url: CHAT_URL,              link: CHAT_URL },
+    { label: 'Authelia',            url: 'http://127.0.0.1:9091',  link: AUTH_LINK },
+    { label: 'Grafana',             url: GRAFANA_URL,           link: GRAFANA_LINK },
+    { label: 'Netdata (claudebox)', url: 'http://127.0.0.1:19999', link: NETDATA_LINK },
+    { label: 'Netdata (atlas)',     url: ATLAS_NETDATA_URL,     link: null },
+    { label: 'CloudCLI',            url: 'http://127.0.0.1:3004',  link: CLOUDCLI_LINK },
     { label: 'qmd',                 url: 'http://127.0.0.1:8181',  link: null },
     { label: 'NFS mount',           url: null, mountpoint: '/mnt/atlas/claudebox', link: null },
   ],
@@ -85,11 +98,11 @@ module.exports = {
     ],
 
     // TLS cert path (SWAG fullchain)
-    tlsCertPath: '/opt/appdata/swag/etc/letsencrypt/live/claudebox.me/fullchain.pem',
+    tlsCertPath: TLS_CERT_PATH,
 
     // Deep check endpoints (thorough only)
     deepChecks: [
-      { label: 'LibreChat', url: 'https://chat.claudebox.me/', expectStatus: 200 },
+      { label: 'LibreChat', url: `${CHAT_URL}/`, expectStatus: 200 },
       { label: 'Authelia', url: 'http://127.0.0.1:9091/', expectStatus: 200 },
       { label: 'qmd', url: 'http://127.0.0.1:8181/health', expectStatus: 200 },
       { label: 'Reranker', url: 'http://127.0.0.1:8787/health', expectStatus: 200 },
@@ -105,12 +118,12 @@ module.exports = {
 
     // Cross-host connectivity targets
     pingHosts: [
-      { label: 'atlas', host: '10.10.1.9' },
-      { label: 'unraid', host: '10.10.1.6' },
+      { label: 'atlas', host: ATLAS_IP },
+      { label: 'unraid', host: UNRAID_IP },
     ],
 
     // DNS domains to resolve
-    dnsChecks: ['claudebox.me', 'glitch42.com', 'google.com'],
+    dnsChecks: DNS_CHECK_DOMAINS,
 
     // ntfy endpoint for failure alerts — set NTFY_URL in .env
     ntfyUrl: process.env.NTFY_URL || null,
