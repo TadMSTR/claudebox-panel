@@ -1,3 +1,7 @@
+---
+tier: baseline
+---
+
 # AGENTS.md — claudebox-panel
 
 Admin panel for the claudebox AI workstation. Express.js backend with a vanilla JS frontend, served behind SWAG and protected by a bearer token.
