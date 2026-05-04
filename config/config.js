@@ -125,8 +125,6 @@ module.exports = {
     // DNS domains to resolve
     dnsChecks: DNS_CHECK_DOMAINS,
 
-    // ntfy endpoint for failure alerts — set NTFY_URL in .env
-    ntfyUrl: process.env.NTFY_URL || null,
   },
 
   // Dependency updates section

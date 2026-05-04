@@ -1,6 +1,5 @@
 const express = require('express');
 const http = require('http');
-const https = require('https');
 const net = require('net');
 const dns = require('dns');
 const fs = require('fs');
@@ -539,19 +538,11 @@ function sendNtfy(data) {
     .flatMap(c => c.checks)
     .filter(c => c.status === 'fail');
 
-  if (failures.length === 0 || !diag.ntfyUrl) return;
+  if (failures.length === 0) return;
 
-  const body = failures.map(f => `FAIL: ${f.label} \u2014 ${f.message}${f.detail ? ` (${f.detail})` : ''}`).join('\n');
-  try {
-    const url = new URL(diag.ntfyUrl);
-    const mod = url.protocol === 'https:' ? https : http;
-    const req = mod.request(url, {
-      method: 'POST',
-      headers: { Title: `Claudebox: ${failures.length} diagnostic failure(s)`, Priority: 'high', Tags: 'warning' },
-    }, () => {});
-    req.on('error', () => {});
-    req.end(body);
-  } catch (_) {}
+  const lines = failures.map(f => `FAIL: ${f.label} \u2014 ${f.message}${f.detail ? ` (${f.detail})` : ''}`);
+  const msg = `Claudebox: ${failures.length} diagnostic failure(s)\n${lines.join('\n')}`;
+  execFile(`${os.homedir()}/scripts/send-matrix.sh`, ['claudebox', msg], () => {});
 }
 
 // ── Routes ──
