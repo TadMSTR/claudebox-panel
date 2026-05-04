@@ -212,8 +212,8 @@ async function checkNFSResponsive(opts) {
 async function checkPorts(opts) {
   const start = Date.now();
   const down = [];
-  await Promise.all(diag.expectedPorts.map(async ({ port, label }) => {
-    const up = await checkPort(port);
+  await Promise.all(diag.expectedPorts.map(async ({ port, label, host }) => {
+    const up = await checkPort(port, host || '127.0.0.1');
     if (!up) down.push(`${label} (:${port})`);
   }));
   if (down.length > 0) return result('ports', 'Port listening', 'fail', `${down.length} expected port(s) not listening`, `Down: ${down.join(', ')}`, Date.now() - start);

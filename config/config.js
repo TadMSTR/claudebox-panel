@@ -56,7 +56,7 @@ module.exports = {
     { label: 'Netdata (claudebox)', url: 'http://127.0.0.1:19999', link: NETDATA_LINK },
     { label: 'Netdata (atlas)',     url: ATLAS_NETDATA_URL,     link: null },
     { label: 'CloudCLI',            url: 'http://127.0.0.1:3004',  link: CLOUDCLI_LINK },
-    { label: 'qmd',                 url: 'http://127.0.0.1:8181',  link: null },
+    { label: 'qmd',                 url: 'http://localhost:8181',  link: null },
     { label: 'NFS mount',           url: null, mountpoint: '/mnt/atlas/claudebox', link: null },
   ],
 
@@ -90,7 +90,7 @@ module.exports = {
       { port: 443,   label: 'swag' },
       { port: 3003,  label: 'agent-panel' },
       { port: 3004,  label: 'cloudcli' },
-      { port: 8181,  label: 'qmd' },
+      { port: 8181,  label: 'qmd', host: 'localhost' },
       { port: 8282,  label: 'homelab-ops-mcp' },
       { port: 9091,  label: 'authelia' },
       { port: 9898,  label: 'backrest' },
@@ -104,7 +104,7 @@ module.exports = {
     deepChecks: [
       { label: 'LibreChat', url: `${CHAT_URL}/`, expectStatus: 200 },
       { label: 'Authelia', url: 'http://127.0.0.1:9091/', expectStatus: 200 },
-      { label: 'qmd', url: 'http://127.0.0.1:8181/health', expectStatus: 200 },
+      { label: 'qmd', url: 'http://localhost:8181/mcp', expectStatus: 200 },
       { label: 'Reranker', url: 'http://127.0.0.1:8787/health', expectStatus: 200 },
     ],
 
