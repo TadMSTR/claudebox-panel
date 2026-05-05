@@ -69,7 +69,7 @@ module.exports = {
     expectedContainers: [
       'swag', 'authelia', 'librechat', 'librechat-mongodb', 'librechat-meilisearch',
       'librechat-backrest-mcp', 'librechat-exporter', 'librechat-grafana-mcp',
-      'dockhand', 'open-notebook', 'open-notebook-surrealdb',
+      'dockhand',
       'reranker', 'firecrawl-api', 'firecrawl-worker', 'firecrawl-puppeteer', 'firecrawl-redis',
       'searxng', 'searxng-valkey',
       'jobsearch-mcp', 'jobsearch-postgres', 'jobsearch-qdrant',
